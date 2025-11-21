@@ -8,7 +8,6 @@ use thiserror::Error;
 use std::io;
 
 #[derive(Error, Debug)]
-#[allow(dead_code)]
 pub enum InfraError {
     /// ファイルシステムエラー
     #[error("file system error: {context}")]
@@ -32,14 +31,6 @@ pub enum InfraError {
         endpoint: String,
         message: String,
         status_code: Option<u16>,
-    },
-
-    /// 設定ファイルエラー（将来実装）
-    #[error("configuration error: {message}")]
-    Config {
-        message: String,
-        #[source]
-        source: Option<Box<dyn std::error::Error + Send + Sync>>,
     },
 
     /// タイムアウトエラー
@@ -102,7 +93,6 @@ impl InfraError {
         use crate::domain::error::ErrorSeverity;
         
         match self {
-            Self::Config { .. } => ErrorSeverity::ConfigError,
             Self::FileSystem { .. } | Self::Io(_) => ErrorSeverity::SystemError,
             Self::Network { .. } | Self::Timeout { .. } | Self::Api { .. } => {
                 ErrorSeverity::SystemError

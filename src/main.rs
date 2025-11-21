@@ -8,6 +8,7 @@ use std::env;
 use anyhow::Result;
 use domain::error::DomainError;
 use api::error::InfraError;
+use config::error::ConfigError;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -64,6 +65,11 @@ fn determine_exit_code(error: &anyhow::Error) -> i32 {
         if let Some(infra_err) = cause.downcast_ref::<InfraError>() {
             return infra_err.severity().exit_code();
         }
+        
+        // ConfigError の場合
+        if let Some(config_err) = cause.downcast_ref::<ConfigError>() {
+            return config_err.severity().exit_code();
+        }
     }
     
     // 不明なエラーの場合はデフォルトの終了コード
@@ -76,6 +82,13 @@ fn get_error_hint(error: &anyhow::Error) -> Option<String> {
         // DomainError からヒントを取得
         if let Some(domain_err) = cause.downcast_ref::<DomainError>() {
             if let Some(hint) = domain_err.hint() {
+                return Some(hint.to_string());
+            }
+        }
+        
+        // ConfigError からヒントを取得
+        if let Some(config_err) = cause.downcast_ref::<ConfigError>() {
+            if let Some(hint) = config_err.hint() {
                 return Some(hint.to_string());
             }
         }
