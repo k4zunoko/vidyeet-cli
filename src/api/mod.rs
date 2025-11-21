@@ -7,4 +7,6 @@
 // - Video list retrieval
 // - Video deletion
 
+pub mod error;
+
 // TODO: Implement API client

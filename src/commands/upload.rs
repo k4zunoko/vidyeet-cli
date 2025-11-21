@@ -1,4 +1,5 @@
-use std::path::Path;
+use anyhow::{Context, Result};
+use crate::domain::validator;
 
 /// アップロードコマンドを実行する
 /// 
@@ -7,19 +8,27 @@ use std::path::Path;
 /// 
 /// # 戻り値
 /// 成功・失敗を示すResult
+/// 
+/// # エラー
+/// このレイヤーでは anyhow::Result を返し、
+/// ドメイン層・インフラ層のエラーを集約する。
 
-pub fn execute(file_path: &str) -> Result<(), String> {
-    // ファイルの存在確認
-    if !Path::new(file_path).exists() {
-        return Err(format!("File not found: {}", file_path));
-    }
-
-    // TODO: ファイル形式の検証
-    // TODO: ファイルサイズの検証
-    // TODO: Streamable APIクライアントの初期化
-    // TODO: ファイルをStreamableにアップロード
+pub fn execute(file_path: &str) -> Result<()> {
+    // ドメイン層のバリデーションを実行
+    // DomainError は自動的に anyhow::Error に変換される
+    let validation = validator::validate_upload_file(file_path)
+        .context("File validation failed")?;
+    
+    println!("File validated successfully:");
+    println!("  Path: {}", validation.path);
+    println!("  Size: {} bytes ({:.2} MB)", validation.size, validation.size as f64 / 1024.0 / 1024.0);
+    println!("  Format: {}", validation.extension);
+    
+    // TODO: インフラ層 - Streamable APIクライアントの初期化
+    // TODO: インフラ層 - ファイルをStreamableにアップロード
     // TODO: アップロードされた動画のURLを返す
-
-    println!("Uploading: {}", file_path);
+    
+    println!("\n[TODO] Upload to Streamable API");
+    
     Ok(())
 }
