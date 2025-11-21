@@ -8,6 +8,7 @@ use thiserror::Error;
 use std::io;
 
 #[derive(Error, Debug)]
+#[allow(dead_code)]
 pub enum InfraError {
     /// ファイルシステムエラー
     #[error("file system error: {context}")]
@@ -52,6 +53,7 @@ pub enum InfraError {
 
 impl InfraError {
     /// ファイルシステムエラーを作成
+    #[allow(dead_code)]
     pub fn file_system(context: impl Into<String>, source: io::Error) -> Self {
         Self::FileSystem {
             context: context.into(),
@@ -60,6 +62,7 @@ impl InfraError {
     }
 
     /// APIエラーを作成
+    #[allow(dead_code)]
     pub fn api(
         endpoint: impl Into<String>,
         message: impl Into<String>,
@@ -73,6 +76,7 @@ impl InfraError {
     }
 
     /// ネットワークエラーを作成
+    #[allow(dead_code)]
     pub fn network(message: impl Into<String>) -> Self {
         Self::Network {
             message: message.into(),
@@ -80,6 +84,7 @@ impl InfraError {
     }
 
     /// リトライ可能かどうかを判定
+    #[allow(dead_code)]
     pub fn is_retryable(&self) -> bool {
         match self {
             Self::Network { .. } => true,

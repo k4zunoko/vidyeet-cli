@@ -6,6 +6,7 @@
 use thiserror::Error;
 
 #[derive(Error, Debug)]
+#[allow(dead_code)]
 pub enum DomainError {
     /// ファイルが見つからない
     #[error("file not found: {path}")]
