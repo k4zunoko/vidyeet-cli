@@ -30,14 +30,6 @@ pub enum DomainError {
     /// ディレクトリが指定された（ファイルが期待される場所）
     #[error("'{path}' is a directory, not a file")]
     NotAFile { path: String },
-
-    /// 認証エラー
-    #[error("authentication failed: {reason}")]
-    AuthenticationFailed { reason: String },
-
-    /// バリデーションエラー
-    #[error("validation failed: {message}")]
-    ValidationFailed { message: String },
 }
 
 impl DomainError {
@@ -51,8 +43,6 @@ impl DomainError {
             Self::FileTooLarge { .. } => ErrorSeverity::UserError,
             Self::EmptyFile { .. } => ErrorSeverity::UserError,
             Self::NotAFile { .. } => ErrorSeverity::UserError,
-            Self::AuthenticationFailed { .. } => ErrorSeverity::ConfigError,
-            Self::ValidationFailed { .. } => ErrorSeverity::UserError,
         }
     }
 
@@ -70,10 +60,6 @@ impl DomainError {
             }
             Self::EmptyFile { .. } => Some("The file appears to be empty or corrupted."),
             Self::NotAFile { .. } => Some("Please specify a file, not a directory."),
-            Self::AuthenticationFailed { .. } => {
-                Some("Check your API credentials in the configuration.")
-            }
-            Self::ValidationFailed { .. } => None,
         }
     }
 }
