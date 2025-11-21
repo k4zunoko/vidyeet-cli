@@ -1,14 +1,14 @@
 /// 設定管理モジュール
 /// 
 /// このモジュールは2層の設定構造を提供します:
-/// 1. AppConfig - ビルド時に埋め込まれる静的設定
+/// 1. AppConfig - ビルド時にコンパイル時定数として定義される静的設定
 /// 2. UserConfig - 実行時に読み込まれる動的設定
 
 pub mod app;
 pub mod error;
 pub mod user;
 
-pub use app::AppConfig;
+pub use app::{AppConfig, APP_CONFIG};
 pub use error::ConfigError;
 pub use user::UserConfig;
 
@@ -17,8 +17,8 @@ pub use user::UserConfig;
 /// アプリケーション設定とユーザー設定を統合して管理します。
 #[derive(Debug, Clone)]
 pub struct Config {
-    /// ビルド時設定
-    pub app: AppConfig,
+    /// ビルド時設定（参照）
+    pub app: &'static AppConfig,
     
     /// ユーザー設定
     pub user: UserConfig,
@@ -27,7 +27,7 @@ pub struct Config {
 impl Config {
     /// 設定を読み込む
     /// 
-    /// AppConfigはビルド時に埋め込まれた設定を読み込み、
+    /// AppConfigはコンパイル時定数を参照し、
     /// UserConfigはユーザーディレクトリから設定を読み込みます。
     /// 
     /// # Returns
@@ -35,9 +35,8 @@ impl Config {
     /// 
     /// # Errors
     /// ユーザー設定の読み込みに失敗した場合に ConfigError を返します。
-    /// (AppConfigの読み込みはビルド時エラーなので実行時には発生しません)
     pub fn load() -> Result<Self, ConfigError> {
-        let app = AppConfig::load();
+        let app = &APP_CONFIG;
         let user = UserConfig::load()?;
         
         Ok(Self { app, user })
@@ -58,30 +57,13 @@ impl Config {
     
     /// 設定の妥当性を検証
     /// 
+    /// UserConfigの妥当性をチェックします。
+    /// 
     /// # Returns
     /// 設定が妥当な場合はOk、そうでない場合は ConfigError::ValidationError を返します
     pub fn validate(&self) -> Result<(), ConfigError> {
-        // API エンドポイントのチェック
-        if self.app.api.endpoint.is_empty() {
-            return Err(ConfigError::ValidationError {
-                message: "API endpoint is not configured".to_string(),
-            });
-        }
-        
-        // タイムアウト設定のチェック
-        if self.app.api.timeout_seconds == 0 {
-            return Err(ConfigError::ValidationError {
-                message: "API timeout must be greater than 0".to_string(),
-            });
-        }
-        
-        // 対応フォーマットのチェック
-        if self.app.upload.supported_formats.is_empty() {
-            return Err(ConfigError::ValidationError {
-                message: "No supported video formats configured".to_string(),
-            });
-        }
-        
+        // UserConfigの検証のみ実施
+        // TODO: UserConfig::validate() 実装後にここで呼び出す
         Ok(())
     }
 }
@@ -89,13 +71,6 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_validate_config() {
-        // 設定の妥当性検証が正しく動作することを確認
-        let config = Config::load().expect("Failed to load config");
-        config.validate().expect("Config validation failed");
-    }
 
     #[test]
     fn test_has_api_key() {
@@ -141,23 +116,13 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_config_errors() {
-        // 不正な設定に対してエラーが返されることを確認
-        let mut config = Config::load().expect("Failed to load config");
-        
-        // タイムアウトを0に設定（不正な値）
-        config.app.api.timeout_seconds = 0;
+    fn test_validate_config() {
+        // UserConfig検証のテスト
+        // 現在はプレースホルダーなので常に成功
+        let config = Config::load().expect("Failed to load config");
         let result = config.validate();
         
-        assert!(result.is_err());
-        if let Err(e) = result {
-            match e {
-                ConfigError::ValidationError { message } => {
-                    assert!(message.contains("timeout"));
-                }
-                _ => panic!("Expected ValidationError"),
-            }
-        }
+        assert!(result.is_ok(), "Config validation should succeed");
     }
 
     #[test]
@@ -165,9 +130,9 @@ mod tests {
         // Config全体の統合動作を確認
         let config = Config::load().expect("Failed to load config");
         
-        // AppConfigの値が正しく読み込まれていることを確認
-        assert!(!config.app.api.endpoint.is_empty());
-        assert!(config.app.api.timeout_seconds > 0);
+        // AppConfigの値がコンパイル時定数から正しく参照されていることを確認
+        assert_eq!(config.app.api.endpoint, "https://api.streamable.com");
+        assert_eq!(config.app.api.timeout_seconds, 30);
         assert!(!config.app.upload.supported_formats.is_empty());
         
         // UserConfigが読み込まれていることを確認

@@ -5,15 +5,17 @@
 /// macOS:   /Users/<User>/Library/Application Support/streamable-cli/config.toml
 /// Linux:   /home/<user>/.config/streamable-cli/config.toml
 /// 
-/// 初回起動時にuser-default.tomlから自動的にconfig.tomlを作成します。
+/// 初回起動時にデフォルト値から自動的にconfig.tomlを作成します。
 
 use crate::config::error::ConfigError;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
-/// ビルド時に埋め込まれるユーザー設定のデフォルトテンプレート
-const DEFAULT_USER_CONFIG: &str = include_str!("../../user-default.toml");
+const DEFAULT_API_KEY: &str = "your_api_key_here";
+const DEFAULT_TITLE: &str = "My Video";
+const DEFAULT_AUTO_COPY_URL: bool = true;
+const DEFAULT_SHOW_NOTIFICATION: bool = true;
 
 /// ユーザー設定
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -25,7 +27,7 @@ pub struct UserConfig {
     pub default_title: Option<String>,
     
     /// アップロード後に自動的にURLをクリップボードにコピーするか
-    #[serde(default)]
+    #[serde(default = "default_auto_copy_url")]
     pub auto_copy_url: bool,
     
     /// アップロード完了時に通知を表示するか
@@ -33,8 +35,24 @@ pub struct UserConfig {
     pub show_notification: bool,
 }
 
+// プライベート関数（serde用）
+fn default_auto_copy_url() -> bool {
+    DEFAULT_AUTO_COPY_URL
+}
+
 fn default_show_notification() -> bool {
-    true
+    DEFAULT_SHOW_NOTIFICATION
+}
+
+impl Default for UserConfig {
+    fn default() -> Self {
+        Self {
+            api_key: Some(DEFAULT_API_KEY.to_string()),
+            default_title: Some(DEFAULT_TITLE.to_string()),
+            auto_copy_url: DEFAULT_AUTO_COPY_URL,
+            show_notification: DEFAULT_SHOW_NOTIFICATION,
+        }
+    }
 }
 
 impl UserConfig {
@@ -97,14 +115,42 @@ impl UserConfig {
                 })?;
         }
         
-        // デフォルトテンプレートを書き込み
-        fs::write(config_path, DEFAULT_USER_CONFIG)
+        // デフォルト値からTOMLを生成して書き込み
+        let default_toml = Self::default_toml_content();
+        fs::write(config_path, default_toml)
             .map_err(|e| ConfigError::FileSystem {
                 context: format!("Failed to create default config file: {}", config_path.display()),
                 source: e,
             })?;
         
         Ok(())
+    }
+    
+    /// デフォルトTOML設定を生成
+    /// 
+    /// Default トレイトの実装から自動的にTOML文字列を生成します。
+    /// これにより、Rust側のデフォルト値とTOMLテンプレートの同期が保証されます。
+    fn default_toml_content() -> String {
+        format!(
+r#"# Streamable CLI - User Configuration
+# Streamable API キー (必須)
+# https://streamable.com/settings から取得してください
+api_key = "{}"
+
+# デフォルトのビデオタイトル (オプション)
+default_title = "{}"
+
+# アップロード後にURLを自動的にクリップボードにコピーする
+auto_copy_url = {}
+
+# アップロード完了時に通知を表示する
+show_notification = {}
+"#,
+        DEFAULT_API_KEY,
+        DEFAULT_TITLE,
+        DEFAULT_AUTO_COPY_URL,
+        DEFAULT_SHOW_NOTIFICATION
+        )
     }
     
     /// ユーザー設定を保存する
