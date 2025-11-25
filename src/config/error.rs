@@ -2,6 +2,7 @@
 ///
 /// 設定ファイルの読み込み、書き込み、パースに関するエラーを構造化して定義。
 /// 外部エラー(std::io::Error, toml::de::Error等)の発信元を適切に保持する。
+use crate::error_severity::ErrorSeverity;
 use std::io;
 use thiserror::Error;
 
@@ -40,36 +41,17 @@ pub enum ConfigError {
     ValidationError { message: String },
 }
 
-/// Config層エラーの深刻度
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ConfigErrorSeverity {
-    /// 設定エラー（exit code: 2）
-    ConfigError,
-    /// システムエラー（exit code: 3）
-    SystemError,
-}
-
-impl ConfigErrorSeverity {
-    /// 終了コードを返す
-    pub fn exit_code(&self) -> i32 {
-        match self {
-            Self::ConfigError => 2,
-            Self::SystemError => 3,
-        }
-    }
-}
-
 impl ConfigError {
     /// エラーの深刻度を返す
     ///
     /// 終了コードの決定に使用できる
-    pub fn severity(&self) -> ConfigErrorSeverity {
+    pub fn severity(&self) -> ErrorSeverity {
         match self {
-            Self::DirectoryNotFound { .. } => ConfigErrorSeverity::ConfigError,
-            Self::FileSystem { .. } => ConfigErrorSeverity::SystemError,
-            Self::ParseError { .. } => ConfigErrorSeverity::ConfigError,
-            Self::SerializeError { .. } => ConfigErrorSeverity::ConfigError,
-            Self::ValidationError { .. } => ConfigErrorSeverity::ConfigError,
+            Self::DirectoryNotFound { .. } => ErrorSeverity::ConfigError,
+            Self::FileSystem { .. } => ErrorSeverity::SystemError,
+            Self::ParseError { .. } => ErrorSeverity::ConfigError,
+            Self::SerializeError { .. } => ErrorSeverity::ConfigError,
+            Self::ValidationError { .. } => ErrorSeverity::ConfigError,
         }
     }
 

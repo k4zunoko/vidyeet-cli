@@ -4,6 +4,7 @@ use std::io;
 /// 外部システム（ファイルシステム、ネットワーク、API）との
 /// やり取りで発生するエラーを構造化して定義。
 /// #[from] / #[source] を使って原因連鎖を保持する。
+use crate::error_severity::ErrorSeverity;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -86,9 +87,7 @@ impl InfraError {
     }
 
     /// エラーの深刻度を返す
-    pub fn severity(&self) -> crate::domain::error::ErrorSeverity {
-        use crate::domain::error::ErrorSeverity;
-
+    pub fn severity(&self) -> ErrorSeverity {
         match self {
             Self::FileSystem { .. } | Self::Io(_) => ErrorSeverity::SystemError,
             Self::Network { .. } | Self::Timeout { .. } | Self::Api { .. } => {

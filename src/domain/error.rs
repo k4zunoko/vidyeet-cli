@@ -2,6 +2,7 @@
 ///
 /// ビジネスロジックに関連するエラーを構造化して定義。
 /// 外部クレートのエラーは含まず、純粋にドメインの制約違反を表現する。
+use crate::error_severity::ErrorSeverity;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -55,28 +56,6 @@ impl DomainError {
             Self::FileTooLarge { .. } => Some("Try compressing the video or use a smaller file."),
             Self::EmptyFile { .. } => Some("The file appears to be empty or corrupted."),
             Self::NotAFile { .. } => Some("Please specify a file, not a directory."),
-        }
-    }
-}
-
-/// エラーの深刻度
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ErrorSeverity {
-    /// ユーザーの入力エラー（exit code: 1）
-    UserError,
-    /// 設定エラー（exit code: 2）
-    ConfigError,
-    /// システムエラー（exit code: 3）
-    SystemError,
-}
-
-impl ErrorSeverity {
-    /// 終了コードを返す
-    pub fn exit_code(&self) -> i32 {
-        match self {
-            Self::UserError => 1,
-            Self::ConfigError => 2,
-            Self::SystemError => 3,
         }
     }
 }
