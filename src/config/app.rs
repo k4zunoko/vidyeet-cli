@@ -14,7 +14,7 @@ pub struct AppConfig {
 /// API関連の設定
 #[derive(Debug, Clone, Copy)]
 pub struct ApiConfig {
-    /// Streamable API のベースURL
+    /// api.video API のベースURL
     pub endpoint: &'static str,
 
     /// APIリクエストのタイムアウト(秒)
@@ -52,7 +52,7 @@ impl AppConfig {
     pub const fn new() -> Self {
         Self {
             api: ApiConfig {
-                endpoint: "https://api.streamable.com",
+                endpoint: "https://ws.api.video",
                 timeout_seconds: 30,
                 max_retries: 3,
             },
@@ -81,7 +81,7 @@ mod tests {
     #[test]
     fn test_app_config_constants() {
         // グローバル定数が正しく定義されていることを確認
-        assert_eq!(APP_CONFIG.api.endpoint, "https://api.streamable.com");
+        assert_eq!(APP_CONFIG.api.endpoint, "https://ws.api.video");
         assert_eq!(APP_CONFIG.api.timeout_seconds, 30);
         assert_eq!(APP_CONFIG.api.max_retries, 3);
         assert!(!APP_CONFIG.upload.supported_formats.is_empty());

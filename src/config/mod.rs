@@ -32,7 +32,7 @@ mod tests {
     #[test]
     fn test_app_config_direct_access() {
         // APP_CONFIGがグローバル定数として直接アクセス可能であることを確認
-        assert_eq!(APP_CONFIG.api.endpoint, "https://api.streamable.com");
+        assert_eq!(APP_CONFIG.api.endpoint, "https://ws.api.video");
         assert_eq!(APP_CONFIG.api.timeout_seconds, 30);
         assert!(!APP_CONFIG.upload.supported_formats.is_empty());
     }

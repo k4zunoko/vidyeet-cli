@@ -1,9 +1,9 @@
 /// ユーザー設定モジュール
 ///
 /// 実行時にユーザーディレクトリから読み込まれる動的設定を管理します。
-/// Windows: C:\Users\<User>\AppData\Roaming\streamable-cli\config.toml
-/// macOS:   /Users/<User>/Library/Application Support/streamable-cli/config.toml
-/// Linux:   /home/<user>/.config/streamable-cli/config.toml
+/// Windows: C:\Users\<User>\AppData\Roaming\vidyeet-cli\config.toml
+/// macOS:   /Users/<User>/Library/Application Support/vidyeet-cli/config.toml
+/// Linux:   /home/<user>/.config/vidyeet-cli/config.toml
 ///
 /// 初回起動時にデフォルト値から自動的にconfig.tomlを作成します。
 use crate::config::error::ConfigError;
@@ -19,7 +19,7 @@ const DEFAULT_SHOW_NOTIFICATION: bool = true;
 /// ユーザー設定
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserConfig {
-    /// Streamable API キー
+    /// api.video API キー
     pub api_key: Option<String>,
 
     /// デフォルトのビデオタイトル
@@ -67,7 +67,7 @@ impl UserConfig {
             .ok_or_else(|| ConfigError::DirectoryNotFound {
                 message: "Failed to get user config directory".to_string(),
             })
-            .map(|config_dir| config_dir.join("streamable-cli").join("config.toml"))
+            .map(|config_dir| config_dir.join("vidyeet-cli").join("config.toml"))
     }
 
     /// ユーザー設定を読み込む
@@ -136,9 +136,9 @@ impl UserConfig {
     /// これにより、Rust側のデフォルト値とTOMLテンプレートの同期が保証されます。
     fn default_toml_content() -> String {
         format!(
-            r#"# Streamable CLI - User Configuration
-# Streamable API キー (必須)
-# https://streamable.com/settings から取得してください
+            r#"# api.video CLI - User Configuration
+# api.video API キー (必須)
+# https://dashboard.api.video/account/api-keys から取得してください
 api_key = "{}"
 
 # デフォルトのビデオタイトル (オプション)
@@ -220,7 +220,7 @@ show_notification = {}
             .api_key
             .as_ref()
             .ok_or_else(|| ConfigError::ValidationError {
-                message: "API key is required. Please set your Streamable API key in config.toml"
+                message: "API key is required. Please set your api.video API key in config.toml"
                     .to_string(),
             })?;
 
@@ -235,7 +235,7 @@ show_notification = {}
         if api_key == DEFAULT_API_KEY {
             return Err(ConfigError::ValidationError {
                 message: format!(
-                    "API key is still the default value '{}'. Please replace it with your actual Streamable API key from https://streamable.com/settings",
+                    "API key is still the default value '{}'. Please replace it with your actual api.video API key from https://dashboard.api.video/account/api-keys",
                     DEFAULT_API_KEY
                 ),
             });
@@ -282,7 +282,7 @@ mod tests {
     fn test_config_path() {
         // プラットフォーム固有のパスが正しく取得できることを確認
         let path = UserConfig::config_path().expect("Failed to get config path");
-        assert!(path.to_string_lossy().contains("streamable-cli"));
+        assert!(path.to_string_lossy().contains("vidyeet-cli"));
         assert!(path.to_string_lossy().ends_with("config.toml"));
     }
 

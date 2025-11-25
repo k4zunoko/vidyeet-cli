@@ -1,6 +1,6 @@
-// Streamable API client module
+// api.video API client module
 //
-// This module will handle all API communication with Streamable.
+// This module will handle all API communication with api.video.
 // Planned features:
 // - Authentication (API key management)
 // - Video upload

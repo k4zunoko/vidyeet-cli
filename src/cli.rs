@@ -30,8 +30,8 @@ pub fn parse_args(args: &[String]) -> Result<()> {
 
 /// コマンド使用方法を表示する
 fn print_usage() {
-    println!("Usage: streamable-cli <command> [args...]");
+    println!("Usage: vidyeet-cli <command> [args...]");
     println!("Available commands:");
-    println!("  upload <file>  - Upload a video to Streamable");
+    println!("  upload <file>  - Upload a video to api.video");
     println!("  help           - Display this help message");
 }

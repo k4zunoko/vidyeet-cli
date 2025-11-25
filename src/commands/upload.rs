@@ -50,11 +50,11 @@ pub fn execute(file_path: &str) -> Result<()> {
     );
     println!("  API Key: {}...", &api_key[..10.min(api_key.len())]);
 
-    // TODO: インフラ層 - Streamable APIクライアントの初期化
-    // TODO: インフラ層 - ファイルをStreamableにアップロード
+    // TODO: インフラ層 - api.video APIクライアントの初期化
+    // TODO: インフラ層 - ファイルをapi.videoにアップロード
     // TODO: アップロードされた動画のURLを返す
 
-    println!("\n[TODO] Upload to Streamable API");
+    println!("\n[TODO] Upload to api.video API");
 
     Ok(())
 }
