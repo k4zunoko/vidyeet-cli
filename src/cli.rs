@@ -12,16 +12,19 @@ pub fn parse_args(args: &[String]) -> Result<()> {
 
     match command.as_str() {
         "upload" => {
-            let file_path = args.get(2)
+            let file_path = args
+                .get(2)
                 .context("Please specify a file path for upload command")?;
-            commands::upload::execute(file_path)
-                .context("Upload command failed")
+            commands::upload::execute(file_path).context("Upload command failed")
         }
         "help" => {
             commands::help::execute();
             Ok(())
         }
-        _ => bail!("Unknown command: '{}'. Use 'help' to see available commands.", command)
+        _ => bail!(
+            "Unknown command: '{}'. Use 'help' to see available commands.",
+            command
+        ),
     }
 }
 

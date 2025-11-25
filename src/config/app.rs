@@ -1,5 +1,5 @@
 /// アプリケーション設定モジュール
-/// 
+///
 /// ビルド時にコンパイル時定数として定義される静的設定を管理します。
 /// これらの設定は実行時には変更できません。
 
@@ -16,10 +16,10 @@ pub struct AppConfig {
 pub struct ApiConfig {
     /// Streamable API のベースURL
     pub endpoint: &'static str,
-    
+
     /// APIリクエストのタイムアウト(秒)
     pub timeout_seconds: u64,
-    
+
     /// 最大リトライ回数
     pub max_retries: u32,
 }
@@ -29,10 +29,10 @@ pub struct ApiConfig {
 pub struct UploadConfig {
     /// アップロード可能な最大ファイルサイズ (バイト)
     pub max_file_size: u64,
-    
+
     /// アップロードのチャンクサイズ (バイト)
     pub chunk_size: u64,
-    
+
     /// 対応する動画フォーマット
     pub supported_formats: &'static [&'static str],
 }
@@ -42,7 +42,7 @@ pub struct UploadConfig {
 pub struct LoggingConfig {
     /// ログレベル (trace, debug, info, warn, error)
     pub level: &'static str,
-    
+
     /// ログファイルの保存先 (空の場合は標準出力のみ)
     pub file_path: &'static str,
 }
@@ -70,7 +70,7 @@ impl AppConfig {
 }
 
 /// アプリケーション設定のグローバル定数
-/// 
+///
 /// コンパイル時に評価され、実行時のコストはゼロです。
 pub const APP_CONFIG: AppConfig = AppConfig::new();
 
@@ -90,7 +90,7 @@ mod tests {
     #[test]
     fn test_app_config_values() {
         // 各設定値が期待通りであることを確認
-        assert_eq!(APP_CONFIG.upload.max_file_size, 10_737_418_240);
+        assert_eq!(APP_CONFIG.upload.max_file_size, 10_737_418_240); // 10GB
         assert_eq!(APP_CONFIG.upload.chunk_size, 10_485_760);
         assert_eq!(APP_CONFIG.upload.supported_formats.len(), 7);
         assert_eq!(APP_CONFIG.logging.level, "info");

@@ -1,16 +1,12 @@
 /// ドメインサービス: ファイルバリデーション
-/// 
+///
 /// アップロード対象のファイルを検証する。
 /// ドメイン層の責務として、ビジネスルールを適用する。
-
-use std::path::Path;
+///
+/// 設定値（最大ファイルサイズ、サポート形式）はAPP_CONFIGから取得します。
+use crate::config::APP_CONFIG;
 use crate::domain::error::DomainError;
-
-/// サポートされている動画形式
-const SUPPORTED_FORMATS: &[&str] = &["mp4", "mov", "avi", "mkv", "webm", "flv", "wmv"];
-
-/// 最大ファイルサイズ（バイト）: 2GB
-const MAX_FILE_SIZE: u64 = 2 * 1024 * 1024 * 1024;
+use std::path::Path;
 
 /// ファイルのバリデーション結果
 pub struct ValidationResult {
@@ -20,7 +16,7 @@ pub struct ValidationResult {
 }
 
 /// アップロード対象のファイルをバリデーションする
-/// 
+///
 /// # エラー
 /// - ファイルが存在しない
 /// - ディレクトリが指定された
@@ -29,26 +25,26 @@ pub struct ValidationResult {
 /// - ファイルサイズが制限を超過
 pub fn validate_upload_file(file_path: &str) -> Result<ValidationResult, DomainError> {
     let path = Path::new(file_path);
-    
+
     // 存在確認
     if !path.exists() {
         return Err(DomainError::FileNotFound {
             path: file_path.to_string(),
         });
     }
-    
+
     // メタデータ取得（InfraErrorに変換せず、ここではDomainErrorとして扱う）
     let metadata = std::fs::metadata(path).map_err(|_| DomainError::FileNotFound {
         path: file_path.to_string(),
     })?;
-    
+
     // ディレクトリチェック
     if metadata.is_dir() {
         return Err(DomainError::NotAFile {
             path: file_path.to_string(),
         });
     }
-    
+
     // 空ファイルチェック
     let size = metadata.len();
     if size == 0 {
@@ -56,34 +52,36 @@ pub fn validate_upload_file(file_path: &str) -> Result<ValidationResult, DomainE
             path: file_path.to_string(),
         });
     }
-    
-    // ファイルサイズチェック
-    if size > MAX_FILE_SIZE {
+
+    // ファイルサイズチェック（APP_CONFIGから設定値を取得）
+    let max_file_size = APP_CONFIG.upload.max_file_size;
+    if size > max_file_size {
         return Err(DomainError::FileTooLarge {
             size,
-            max: MAX_FILE_SIZE,
+            max: max_file_size,
         });
     }
-    
-    // 拡張子チェック
+
+    // 拡張子チェック（APP_CONFIGから設定値を取得）
+    let supported_formats = APP_CONFIG.upload.supported_formats;
     let extension = path
         .extension()
         .and_then(|ext| ext.to_str())
         .map(|s| s.to_lowercase())
         .ok_or_else(|| DomainError::InvalidFormat {
             path: file_path.to_string(),
-            expected: format!("one of: {}", SUPPORTED_FORMATS.join(", ")),
+            expected: format!("one of: {}", supported_formats.join(", ")),
             found: "no extension".to_string(),
         })?;
-    
-    if !SUPPORTED_FORMATS.contains(&extension.as_str()) {
+
+    if !supported_formats.contains(&extension.as_str()) {
         return Err(DomainError::InvalidFormat {
             path: file_path.to_string(),
-            expected: format!("one of: {}", SUPPORTED_FORMATS.join(", ")),
+            expected: format!("one of: {}", supported_formats.join(", ")),
             found: extension.clone(),
         });
     }
-    
+
     Ok(ValidationResult {
         path: file_path.to_string(),
         size,
@@ -94,10 +92,13 @@ pub fn validate_upload_file(file_path: &str) -> Result<ValidationResult, DomainE
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_supported_formats() {
-        assert!(SUPPORTED_FORMATS.contains(&"mp4"));
-        assert!(SUPPORTED_FORMATS.contains(&"mov"));
+        // APP_CONFIGから取得した形式リストのテスト
+        let formats = APP_CONFIG.upload.supported_formats;
+        assert!(formats.contains(&"mp4"));
+        assert!(formats.contains(&"mov"));
+        assert!(formats.contains(&"webm"));
     }
 }

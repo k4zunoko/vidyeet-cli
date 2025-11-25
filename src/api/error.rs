@@ -1,11 +1,10 @@
+use std::io;
 /// インフラ層のエラー定義
-/// 
+///
 /// 外部システム（ファイルシステム、ネットワーク、API）との
 /// やり取りで発生するエラーを構造化して定義。
 /// #[from] / #[source] を使って原因連鎖を保持する。
-
 use thiserror::Error;
-use std::io;
 
 #[derive(Error, Debug)]
 pub enum InfraError {
@@ -78,7 +77,9 @@ impl InfraError {
             Self::Timeout { .. } => true,
             Self::Api { status_code, .. } => {
                 // 5xx系のステータスコードはリトライ可能
-                status_code.map(|code| code >= 500 && code < 600).unwrap_or(false)
+                status_code
+                    .map(|code| code >= 500 && code < 600)
+                    .unwrap_or(false)
             }
             _ => false,
         }
@@ -87,7 +88,7 @@ impl InfraError {
     /// エラーの深刻度を返す
     pub fn severity(&self) -> crate::domain::error::ErrorSeverity {
         use crate::domain::error::ErrorSeverity;
-        
+
         match self {
             Self::FileSystem { .. } | Self::Io(_) => ErrorSeverity::SystemError,
             Self::Network { .. } | Self::Timeout { .. } | Self::Api { .. } => {
