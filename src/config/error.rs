@@ -79,7 +79,7 @@ impl ConfigError {
                 Some("Review your configuration settings and ensure all required fields are valid.")
             }
             Self::TokenNotFound { .. } => {
-                Some("Please run 'vidyeet-cli login' to authenticate with api.video.")
+                Some("Please run 'vidyeet login' to authenticate with api.video.")
             }
         }
     }

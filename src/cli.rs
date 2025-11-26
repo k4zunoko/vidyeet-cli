@@ -41,7 +41,7 @@ pub async fn parse_args(args: &[String]) -> Result<()> {
 
 /// コマンド使用方法を表示する
 fn print_usage() {
-    println!("Usage: vidyeet-cli <command> [args...]");
+    println!("Usage: vidyeet <command> [args...]");
     println!("Available commands:");
     println!("  login [api_key]  - Login to api.video (API key can be provided or entered interactively)");
     println!("  logout           - Logout from api.video");

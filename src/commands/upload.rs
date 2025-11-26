@@ -22,7 +22,7 @@ pub fn execute(file_path: &str) -> Result<()> {
     // TODO: Phase 6 - 認証実装後に有効化
     // let refresh_token = user_config
     //     .get_refresh_token()
-    //     .context("Token not found. Please run 'vidyeet-cli login' first.")?;
+    //     .context("Token not found. Please run 'vidyeet login' first.")?;
     
     // 現在はダミー値を使用
     let _user_config = user_config; // 未使用警告を回避

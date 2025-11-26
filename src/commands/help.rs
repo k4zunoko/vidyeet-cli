@@ -4,7 +4,7 @@ pub fn execute() {
     println!("Upload videos to api.video easily from the command line");
     println!();
     println!("Usage:");
-    println!("  vidyeet-cli <command> [args...]");
+    println!("  vidyeet <command> [args...]");
     println!();
     println!("Commands:");
     println!("  upload <file>  - Upload a video file");

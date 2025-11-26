@@ -1,9 +1,9 @@
 /// ユーザー設定モジュール
 ///
 /// 実行時にユーザーディレクトリから読み込まれる動的設定を管理します。
-/// Windows: C:\Users\<User>\AppData\Roaming\vidyeet-cli\config.toml
-/// macOS:   /Users/<User>/Library/Application Support/vidyeet-cli/config.toml
-/// Linux:   /home/<user>/.config/vidyeet-cli/config.toml
+/// Windows: C:\Users\<User>\AppData\Roaming\vidyeet\config.toml
+/// macOS:   /Users/<User>/Library/Application Support/vidyeet/config.toml
+/// Linux:   /home/<user>/.config/vidyeet/config.toml
 ///
 /// 初回起動時にデフォルト値から自動的にconfig.tomlを作成します。
 use crate::config::error::ConfigError;
@@ -66,7 +66,7 @@ impl UserConfig {
             .ok_or_else(|| ConfigError::DirectoryNotFound {
                 message: "Failed to get user config directory".to_string(),
             })
-            .map(|config_dir| config_dir.join("vidyeet-cli").join("config.toml"))
+            .map(|config_dir| config_dir.join("vidyeet").join("config.toml"))
     }
 
     /// ユーザー設定を読み込む
@@ -136,7 +136,7 @@ impl UserConfig {
     fn default_toml_content() -> String {
         format!(
             r#"# api.video CLI - User Configuration
-# 認証情報は 'vidyeet-cli login' で設定されます
+# 認証情報は 'vidyeet login' で設定されます
 default_title = "{}"
 auto_copy_url = {}
 show_notification = {}
@@ -219,7 +219,7 @@ show_notification = {}
         self.refresh_token
             .as_deref()
             .ok_or_else(|| ConfigError::TokenNotFound {
-                message: "Token not found. Please run 'vidyeet-cli login' first.".to_string(),
+                message: "Token not found. Please run 'vidyeet login' first.".to_string(),
             })
     }
 
@@ -289,7 +289,7 @@ mod tests {
     fn test_config_path() {
         // プラットフォーム固有のパスが正しく取得できることを確認
         let path = UserConfig::config_path().expect("Failed to get config path");
-        assert!(path.to_string_lossy().contains("vidyeet-cli"));
+        assert!(path.to_string_lossy().contains("vidyeet"));
         assert!(path.to_string_lossy().ends_with("config.toml"));
     }
 
@@ -386,7 +386,7 @@ mod tests {
         // ファイルの内容を直接読んでデフォルト値が書かれていることを確認
         let content = fs::read_to_string(&config_path).expect("Failed to read config");
         assert!(content.contains("auto_copy_url"));
-        assert!(content.contains("vidyeet-cli login"));
+        assert!(content.contains("vidyeet login"));
     }
 
     #[test]
