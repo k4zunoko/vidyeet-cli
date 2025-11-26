@@ -19,7 +19,7 @@ pub async fn execute(api_key_arg: Option<String>) -> Result<()> {
 
     // APIキーの取得（引数またはプロンプト）
     let api_key = match api_key_arg {
-        std::option::Option::Some(key) => key,
+        Some(key) => key,
         std::option::Option::None => {
             print!("Enter your API key: ");
             io::stdout().flush()?;
