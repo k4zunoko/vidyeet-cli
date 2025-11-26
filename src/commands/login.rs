@@ -15,53 +15,52 @@ use std::io::{self, Write};
 /// # Returns
 /// 成功時はOk(())、失敗時はエラー
 pub async fn execute(api_key_arg: Option<String>) -> Result<()> {
-    println!("api.videoにログインします...\n");
+    println!("Logging in to api.video...\n");
 
     // APIキーの取得（引数またはプロンプト）
-    #[allow(non_snake_case)] // パターンマッチングであるNoneが警告されるのを抑制
     let api_key = match api_key_arg {
-        Some(key) => key,
-        None => {
-            print!("APIキーを入力してください: ");
+        std::option::Option::Some(key) => key,
+        std::option::Option::None => {
+            print!("Enter your API key: ");
             io::stdout().flush()?;
             
             // APIキーを標準入力から読み取り
             let mut input = String::new();
             io::stdin()
                 .read_line(&mut input)
-                .context("APIキーの読み取りに失敗しました")?;
+                .context("Failed to read API key from input")?;
             
             input.trim().to_string()
         }
     };
 
     if api_key.is_empty() {
-        anyhow::bail!("APIキーが空です。有効なAPIキーを入力してください。");
+        anyhow::bail!("API key cannot be empty. Please provide a valid API key.");
     }
 
     // 認証マネージャーを作成
     let mut auth_manager = AuthManager::new()
-        .context("認証マネージャーの初期化に失敗しました")?;
+        .context("Failed to initialize authentication manager")?;
 
     // ログイン実行
-    println!("認証中...");
+    println!("Authenticating...");
     let refresh_token = auth_manager
         .login(&api_key)
         .await
-        .context("ログインに失敗しました。APIキーが正しいか確認してください。")?;
+        .context("Login failed. Please verify your API key is correct.")?;
 
     // UserConfigをロードしてリフレッシュトークンを保存
     let mut config = UserConfig::load()
-        .context("設定ファイルの読み込みに失敗しました")?;
+        .context("Failed to load configuration file")?;
     
     config.set_refresh_token(refresh_token);
     
     config
         .save()
-        .context("設定ファイルの保存に失敗しました")?;
+        .context("Failed to save configuration file")?;
 
-    println!("\n✓ ログインに成功しました！");
-    println!("リフレッシュトークンが保存されました。");
+    println!("\n✓ Login successful!");
+    println!("Refresh token has been saved.");
 
     Ok(())
 }

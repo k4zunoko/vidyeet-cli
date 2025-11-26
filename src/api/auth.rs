@@ -126,10 +126,9 @@ impl AuthManager {
     /// トークンが期限切れかチェック（メモリ内）
     ///
     /// トークンの有効期限が切れているか、または5分以内に切れる場合にtrueを返します。
-    #[allow(non_snake_case)] // パターンマッチングであるNoneが警告されるのを抑制
     fn is_token_expired(&self) -> bool {
         match self.token_expires_at {
-            Some(expires_at) => {
+            std::option::Option::Some(expires_at) => {
                 // 5分の余裕を持たせて期限切れと判定
                 let grace_period = Duration::from_secs(300);
                 let now = Instant::now();
@@ -140,7 +139,7 @@ impl AuthManager {
                 
                 now >= effective_expiration
             }
-            None => true,
+            std::option::Option::None => true,
         }
     }
 }

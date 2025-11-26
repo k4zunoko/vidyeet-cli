@@ -9,15 +9,15 @@ use anyhow::{Context, Result};
 /// # Returns
 /// 成功時はOk(())、失敗時はエラー
 pub async fn execute() -> Result<()> {
-    println!("api.videoからログアウトします...\n");
+    println!("Logging out from api.video...\n");
 
     // UserConfigをロード
     let mut config = UserConfig::load()
-        .context("設定ファイルの読み込みに失敗しました")?;
+        .context("Failed to load configuration file")?;
 
     // リフレッシュトークンが存在するか確認
     if !config.has_refresh_token() {
-        println!("既にログアウトしています。");
+        println!("Already logged out.");
         return Ok(());
     }
 
@@ -27,10 +27,10 @@ pub async fn execute() -> Result<()> {
     // 設定を保存
     config
         .save()
-        .context("設定ファイルの保存に失敗しました")?;
+        .context("Failed to save configuration file")?;
 
-    println!("✓ ログアウトしました。");
-    println!("リフレッシュトークンが削除されました。");
+    println!("✓ Logged out successfully.");
+    println!("Refresh token has been removed.");
 
     Ok(())
 }
