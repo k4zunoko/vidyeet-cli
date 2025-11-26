@@ -11,17 +11,18 @@ use config::error::ConfigError;
 use domain::error::DomainError;
 use std::env;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let args: Vec<String> = env::args().collect();
 
-    if let Err(e) = run(&args) {
+    if let Err(e) = run(&args).await {
         handle_error(e);
     }
 }
 
 /// アプリケーションのメイン処理
-fn run(args: &[String]) -> Result<()> {
-    cli::parse_args(args)
+async fn run(args: &[String]) -> Result<()> {
+    cli::parse_args(args).await
 }
 
 /// エラーハンドリングとユーザーへの表示

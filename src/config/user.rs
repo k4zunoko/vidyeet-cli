@@ -12,8 +12,8 @@ use std::fs;
 use std::path::PathBuf;
 
 const DEFAULT_TITLE: &str = "My Video";
-const DEFAULT_AUTO_COPY_URL: bool = true;
-const DEFAULT_SHOW_NOTIFICATION: bool = true;
+const DEFAULT_AUTO_COPY_URL: bool = false;
+const DEFAULT_SHOW_NOTIFICATION: bool = false;
 
 /// ユーザー設定
 #[derive(Debug, Clone, Serialize, Deserialize)]
