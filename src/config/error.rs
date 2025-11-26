@@ -39,6 +39,10 @@ pub enum ConfigError {
     /// 設定の検証エラー
     #[error("configuration validation failed: {message}")]
     ValidationError { message: String },
+
+    /// トークンが見つからない
+    #[error("token not found: {message}")]
+    TokenNotFound { message: String },
 }
 
 impl ConfigError {
@@ -52,6 +56,7 @@ impl ConfigError {
             Self::ParseError { .. } => ErrorSeverity::ConfigError,
             Self::SerializeError { .. } => ErrorSeverity::ConfigError,
             Self::ValidationError { .. } => ErrorSeverity::ConfigError,
+            Self::TokenNotFound { .. } => ErrorSeverity::ConfigError,
         }
     }
 
@@ -72,6 +77,9 @@ impl ConfigError {
             }
             Self::ValidationError { .. } => {
                 Some("Review your configuration settings and ensure all required fields are valid.")
+            }
+            Self::TokenNotFound { .. } => {
+                Some("Please run 'vidyeet-cli login' to authenticate with api.video.")
             }
         }
     }

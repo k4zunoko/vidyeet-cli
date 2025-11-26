@@ -11,7 +11,6 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
-const DEFAULT_API_KEY: &str = "your_api_key_here";
 const DEFAULT_TITLE: &str = "My Video";
 const DEFAULT_AUTO_COPY_URL: bool = true;
 const DEFAULT_SHOW_NOTIFICATION: bool = true;
@@ -19,11 +18,11 @@ const DEFAULT_SHOW_NOTIFICATION: bool = true;
 /// ユーザー設定
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserConfig {
-    /// api.video API キー
-    pub api_key: Option<String>,
-
     /// デフォルトのビデオタイトル
     pub default_title: Option<String>,
+
+    /// リフレッシュトークン（api.video認証用）
+    pub refresh_token: Option<String>,
 
     /// アップロード後に自動的にURLをクリップボードにコピーするか
     #[serde(default = "default_auto_copy_url")]
@@ -46,8 +45,8 @@ fn default_show_notification() -> bool {
 impl Default for UserConfig {
     fn default() -> Self {
         Self {
-            api_key: Some(DEFAULT_API_KEY.to_string()),
             default_title: Some(DEFAULT_TITLE.to_string()),
+            refresh_token: None,
             auto_copy_url: DEFAULT_AUTO_COPY_URL,
             show_notification: DEFAULT_SHOW_NOTIFICATION,
         }
@@ -137,20 +136,12 @@ impl UserConfig {
     fn default_toml_content() -> String {
         format!(
             r#"# api.video CLI - User Configuration
-# api.video API キー (必須)
-# https://dashboard.api.video/account/api-keys から取得してください
-api_key = "{}"
-
-# デフォルトのビデオタイトル (オプション)
+# 認証情報は 'vidyeet-cli login' で設定されます
 default_title = "{}"
-
-# アップロード後にURLを自動的にクリップボードにコピーする
 auto_copy_url = {}
-
-# アップロード完了時に通知を表示する
 show_notification = {}
 "#,
-            DEFAULT_API_KEY, DEFAULT_TITLE, DEFAULT_AUTO_COPY_URL, DEFAULT_SHOW_NOTIFICATION
+            DEFAULT_TITLE, DEFAULT_AUTO_COPY_URL, DEFAULT_SHOW_NOTIFICATION
         )
     }
 
@@ -181,25 +172,22 @@ show_notification = {}
             source: e,
         })?;
 
-        Ok(())
-    }
-
-    /// APIキーが設定されているかチェック
-    pub fn has_api_key(&self) -> bool {
-        self.api_key.as_ref().map_or(false, |key| !key.is_empty())
-    }
-
-    /// APIキーを設定
-    ///
-    /// # Errors
-    /// APIキーが空の場合に ConfigError::ValidationError を返します。
-    pub fn set_api_key(&mut self, api_key: String) -> Result<(), ConfigError> {
-        if api_key.is_empty() {
-            return Err(ConfigError::ValidationError {
-                message: "API key cannot be empty".to_string(),
-            });
+        // Unix系: パーミッション設定 (0600) - トークンが含まれるため
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let permissions = std::fs::Permissions::from_mode(0o600);
+            fs::set_permissions(&config_path, permissions).map_err(|e| {
+                ConfigError::FileSystem {
+                    context: format!(
+                        "Failed to set permissions for config file: {}",
+                        config_path.display()
+                    ),
+                    source: e,
+                }
+            })?;
         }
-        self.api_key = Some(api_key);
+
         Ok(())
     }
 
@@ -208,50 +196,41 @@ show_notification = {}
     /// Fail Fast: 設定に問題がある場合は即座にエラーを返します。
     ///
     /// # 検証内容
-    /// - APIキーが設定されているか
-    /// - デフォルト値（"your_api_key_here"）のままでないか
-    /// - 最小長10文字以上か
+    /// - 現在は特に検証項目はありません
+    ///   (認証は login コマンドで管理されます)
     ///
     /// # Errors
     /// 検証に失敗した場合に ConfigError::ValidationError を返します。
     pub fn validate(&self) -> Result<(), ConfigError> {
-        // APIキーの存在チェック
-        let api_key = self
-            .api_key
-            .as_ref()
-            .ok_or_else(|| ConfigError::ValidationError {
-                message: "API key is required. Please set your api.video API key in config.toml"
-                    .to_string(),
-            })?;
-
-        // 空文字列チェック
-        if api_key.is_empty() {
-            return Err(ConfigError::ValidationError {
-                message: "API key cannot be empty".to_string(),
-            });
-        }
-
-        // デフォルト値チェック
-        if api_key == DEFAULT_API_KEY {
-            return Err(ConfigError::ValidationError {
-                message: format!(
-                    "API key is still the default value '{}'. Please replace it with your actual api.video API key from https://dashboard.api.video/account/api-keys",
-                    DEFAULT_API_KEY
-                ),
-            });
-        }
-
-        // 最小長チェック
-        if api_key.len() < 10 {
-            return Err(ConfigError::ValidationError {
-                message: format!(
-                    "API key is too short (minimum 10 characters required, got {})",
-                    api_key.len()
-                ),
-            });
-        }
-
+        // 認証は login コマンドで管理されるため、ここでの検証は不要
         Ok(())
+    }
+
+    /// リフレッシュトークンを設定
+    pub fn set_refresh_token(&mut self, token: String) {
+        self.refresh_token = Some(token);
+    }
+
+    /// リフレッシュトークンを取得
+    ///
+    /// # Errors
+    /// トークンが設定されていない場合に ConfigError::TokenNotFound を返します。
+    pub fn get_refresh_token(&self) -> Result<&str, ConfigError> {
+        self.refresh_token
+            .as_deref()
+            .ok_or_else(|| ConfigError::TokenNotFound {
+                message: "Token not found. Please run 'vidyeet-cli login' first.".to_string(),
+            })
+    }
+
+    /// リフレッシュトークンが存在するかチェック
+    pub fn has_refresh_token(&self) -> bool {
+        self.refresh_token.is_some()
+    }
+
+    /// リフレッシュトークンを削除
+    pub fn clear_refresh_token(&mut self) {
+        self.refresh_token = None;
     }
 }
 
@@ -261,21 +240,49 @@ mod tests {
     use std::fs;
 
     #[test]
-    fn test_has_api_key() {
-        // APIキーの有無を正しく判定できることを確認
+    fn test_has_refresh_token() {
+        // リフレッシュトークンの有無を正しく判定できることを確認
         let mut config = UserConfig {
-            api_key: None,
             default_title: None,
+            refresh_token: None,
             auto_copy_url: false,
             show_notification: true,
         };
 
-        assert!(!config.has_api_key());
+        assert!(!config.has_refresh_token());
 
-        config
-            .set_api_key("test_key_1234567890".to_string())
-            .expect("Failed to set API key");
-        assert!(config.has_api_key());
+        config.set_refresh_token("test_refresh_token_1234567890".to_string());
+        assert!(config.has_refresh_token());
+    }
+
+    #[test]
+    fn test_get_refresh_token() {
+        // リフレッシュトークンの取得が正しく動作することを確認
+        let mut config = UserConfig::default();
+        
+        // トークンが未設定の場合はエラー
+        let result = config.get_refresh_token();
+        assert!(result.is_err());
+        if let Err(ConfigError::TokenNotFound { message }) = result {
+            assert!(message.contains("login"));
+        }
+        
+        // トークン設定後は取得できる
+        config.set_refresh_token("test_token".to_string());
+        assert_eq!(config.get_refresh_token().unwrap(), "test_token");
+    }
+
+    #[test]
+    fn test_clear_refresh_token() {
+        // リフレッシュトークンのクリアが正しく動作することを確認
+        let mut config = UserConfig::default();
+        config.set_refresh_token("test_token".to_string());
+        
+        assert!(config.has_refresh_token());
+        
+        config.clear_refresh_token();
+        assert!(!config.has_refresh_token());
+        assert!(config.get_refresh_token().is_err());
     }
 
     #[test]
@@ -297,12 +304,13 @@ mod tests {
         }
 
         // テスト用の設定を作成
-        let test_config = UserConfig {
-            api_key: Some("valid_test_key_1234567890".to_string()),
+        let mut test_config = UserConfig {
             default_title: Some("Test Video Title".to_string()),
+            refresh_token: None,
             auto_copy_url: true,
             show_notification: false,
         };
+        test_config.set_refresh_token("test_refresh_token_xyz".to_string());
 
         // 保存を実行
         test_config.save().expect("Failed to save config");
@@ -315,8 +323,8 @@ mod tests {
 
         // 値が一致することを確認
         assert_eq!(
-            loaded_config.api_key, test_config.api_key,
-            "API keys should match"
+            loaded_config.refresh_token, test_config.refresh_token,
+            "Refresh tokens should match"
         );
         assert_eq!(
             loaded_config.default_title, test_config.default_title,
@@ -341,8 +349,8 @@ mod tests {
         if let Some(parent) = config_path.parent() {
             // テスト用の設定を保存
             let test_config = UserConfig {
-                api_key: Some("test_key".to_string()),
                 default_title: None,
+                refresh_token: Some("test_token".to_string()),
                 auto_copy_url: false,
                 show_notification: true,
             };
@@ -366,27 +374,27 @@ mod tests {
             fs::remove_file(&config_path).ok();
         }
 
-        // load() を実行（デフォルトファイルが作成されるが、検証でエラーになる）
+        // load() を実行（デフォルトファイルが作成される）
         let result = UserConfig::load();
 
         // ファイルが作成されたことを確認
         assert!(config_path.exists(), "Config file should be created");
 
-        // デフォルト値（"your_api_key_here"）では検証エラーになることを確認
-        assert!(result.is_err(), "Default config should fail validation");
+        // 認証なしでもロード成功（検証不要）
+        assert!(result.is_ok(), "Default config should load successfully");
 
         // ファイルの内容を直接読んでデフォルト値が書かれていることを確認
         let content = fs::read_to_string(&config_path).expect("Failed to read config");
-        assert!(content.contains("your_api_key_here"));
         assert!(content.contains("auto_copy_url"));
+        assert!(content.contains("vidyeet-cli login"));
     }
 
     #[test]
     fn test_config_serialization() {
         // 設定のシリアライゼーションが正しく動作することを確認
         let config = UserConfig {
-            api_key: Some("test_key".to_string()),
             default_title: Some("My Video".to_string()),
+            refresh_token: Some("test_refresh_token".to_string()),
             auto_copy_url: true,
             show_notification: false,
         };
@@ -395,119 +403,24 @@ mod tests {
         let serialized = toml::to_string_pretty(&config).expect("Failed to serialize");
 
         // 必要なフィールドが含まれていることを確認
-        assert!(serialized.contains("api_key"));
-        assert!(serialized.contains("test_key"));
+        assert!(serialized.contains("refresh_token"));
+        assert!(serialized.contains("test_refresh_token"));
         assert!(serialized.contains("default_title"));
         assert!(serialized.contains("auto_copy_url"));
         assert!(serialized.contains("show_notification"));
     }
 
     #[test]
-    fn test_validate_api_key_required() {
-        // APIキーが未設定の場合にエラーを返すことを確認
+    fn test_validate_always_succeeds() {
+        // 認証はloginコマンドで管理されるため、validate()は常に成功する
         let config = UserConfig {
-            api_key: None,
             default_title: None,
+            refresh_token: None,
             auto_copy_url: false,
             show_notification: true,
-        };
-
-        let result = config.validate();
-        assert!(result.is_err());
-        if let Err(ConfigError::ValidationError { message }) = result {
-            assert!(message.contains("API key is required"));
-        } else {
-            panic!("Expected ValidationError for missing API key");
-        }
-    }
-
-    #[test]
-    fn test_validate_api_key_empty() {
-        // APIキーが空文字列の場合にエラーを返すことを確認
-        let config = UserConfig {
-            api_key: Some("".to_string()),
-            default_title: None,
-            auto_copy_url: false,
-            show_notification: true,
-        };
-
-        let result = config.validate();
-        assert!(result.is_err());
-        if let Err(ConfigError::ValidationError { message }) = result {
-            assert!(message.contains("cannot be empty"));
-        } else {
-            panic!("Expected ValidationError for empty API key");
-        }
-    }
-
-    #[test]
-    fn test_validate_api_key_default() {
-        // デフォルト値（"your_api_key_here"）のままの場合にエラーを返すことを確認
-        let config = UserConfig {
-            api_key: Some(DEFAULT_API_KEY.to_string()),
-            default_title: None,
-            auto_copy_url: false,
-            show_notification: true,
-        };
-
-        let result = config.validate();
-        assert!(result.is_err());
-        if let Err(ConfigError::ValidationError { message }) = result {
-            assert!(message.contains("default value"));
-        } else {
-            panic!("Expected ValidationError for default API key");
-        }
-    }
-
-    #[test]
-    fn test_validate_api_key_too_short() {
-        // APIキーが短すぎる場合にエラーを返すことを確認
-        let config = UserConfig {
-            api_key: Some("short".to_string()),
-            default_title: None,
-            auto_copy_url: false,
-            show_notification: true,
-        };
-
-        let result = config.validate();
-        assert!(result.is_err());
-        if let Err(ConfigError::ValidationError { message }) = result {
-            assert!(message.contains("too short"));
-        } else {
-            panic!("Expected ValidationError for short API key");
-        }
-    }
-
-    #[test]
-    fn test_validate_api_key_valid() {
-        // 有効なAPIキーの場合に検証が通ることを確認
-        let config = UserConfig {
-            api_key: Some("valid_api_key_1234567890".to_string()),
-            default_title: Some("My Video".to_string()),
-            auto_copy_url: true,
-            show_notification: false,
         };
 
         let result = config.validate();
         assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_set_api_key_validation() {
-        // set_api_key が空文字列を拒否することを確認
-        let mut config = UserConfig {
-            api_key: None,
-            default_title: None,
-            auto_copy_url: false,
-            show_notification: true,
-        };
-
-        let result = config.set_api_key("".to_string());
-        assert!(result.is_err());
-        if let Err(ConfigError::ValidationError { message }) = result {
-            assert!(message.contains("cannot be empty"));
-        } else {
-            panic!("Expected ValidationError for empty API key");
-        }
     }
 }

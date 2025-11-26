@@ -19,11 +19,13 @@ pub fn execute(file_path: &str) -> Result<()> {
     let user_config = UserConfig::load()
         .context("Failed to load user configuration. Please check your config.toml file.")?;
 
-    // APIキー取得
-    let api_key = user_config
-        .api_key
-        .as_ref()
-        .context("API key is not configured")?;
+    // TODO: Phase 6 - 認証実装後に有効化
+    // let refresh_token = user_config
+    //     .get_refresh_token()
+    //     .context("Token not found. Please run 'vidyeet-cli login' first.")?;
+    
+    // 現在はダミー値を使用
+    let _user_config = user_config; // 未使用警告を回避
 
     // ドメイン層のバリデーションを実行
     // DomainError は自動的に anyhow::Error に変換される
@@ -48,7 +50,8 @@ pub fn execute(file_path: &str) -> Result<()> {
         APP_CONFIG.upload.max_file_size,
         APP_CONFIG.upload.max_file_size / 1024 / 1024
     );
-    println!("  API Key: {}...", &api_key[..10.min(api_key.len())]);
+    // TODO: Phase 6 - 認証実装後にトークン表示を有効化
+    // println!("  Refresh Token: {}...", &refresh_token[..10.min(refresh_token.len())]);
 
     // TODO: インフラ層 - api.video APIクライアントの初期化
     // TODO: インフラ層 - ファイルをapi.videoにアップロード

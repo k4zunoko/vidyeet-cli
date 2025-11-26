@@ -15,7 +15,7 @@
 ///
 /// // UserConfig: load時に自動検証
 /// let user_config = UserConfig::load()?;
-/// let api_key = user_config.api_key.as_ref().unwrap();
+/// let refresh_token = user_config.get_refresh_token()?;
 /// ```
 pub mod app;
 pub mod error;
@@ -46,20 +46,12 @@ mod tests {
             std::fs::remove_file(&config_path).ok();
         }
 
-        // load() はデフォルト設定を作成するが、検証エラーになるはず（"your_api_key_here"）
+        // load() はデフォルト設定を作成する（認証なしでも成功）
         let result = UserConfig::load();
-        assert!(result.is_err(), "Default config should fail validation");
+        assert!(result.is_ok(), "Default config should load successfully");
 
-        if let Err(crate::config::ConfigError::ValidationError { message }) = result {
-            // エラーメッセージにデフォルトAPIキーの言及があることを確認
-            assert!(
-                message.contains("your_api_key_here") || message.contains("still the default"),
-                "Expected validation error message about default API key, got: {}",
-                message
-            );
-        } else {
-            panic!("Expected ValidationError for default API key, got: {:?}", result);
-        }
+        let config = result.unwrap();
+        assert!(!config.has_refresh_token(), "Default config should not have refresh token");
     }
 
     #[test]
@@ -70,13 +62,14 @@ mod tests {
             std::fs::remove_file(&config_path).ok();
         }
 
-        // 有効なAPIキーで設定を作成
-        let config = UserConfig {
-            api_key: Some("valid_test_key_1234567890".to_string()),
+        // リフレッシュトークンで設定を作成
+        let mut config = UserConfig {
             default_title: Some("Test Title".to_string()),
+            refresh_token: None,
             auto_copy_url: true,
             show_notification: false,
         };
+        config.set_refresh_token("test_refresh_token_xyz".to_string());
 
         // 検証が通ることを確認
         assert!(config.validate().is_ok());
@@ -86,7 +79,7 @@ mod tests {
 
         // 再読み込み（自動検証される）
         let reloaded = UserConfig::load().expect("Failed to reload config");
-        assert_eq!(reloaded.api_key, config.api_key);
+        assert_eq!(reloaded.refresh_token, config.refresh_token);
         assert_eq!(reloaded.default_title, config.default_title);
     }
 
@@ -99,15 +92,16 @@ mod tests {
         assert!(max_size > 0);
 
         // UserConfig: 有効な設定を作成してテスト
-        let user_config = UserConfig {
-            api_key: Some("test_api_key_1234567890".to_string()),
+        let mut user_config = UserConfig {
             default_title: Some("My Video".to_string()),
+            refresh_token: None,
             auto_copy_url: true,
             show_notification: true,
         };
+        user_config.set_refresh_token("test_refresh_token_abc".to_string());
 
         // 検証が通ることを確認
         assert!(user_config.validate().is_ok());
-        assert!(user_config.has_api_key());
+        assert!(user_config.has_refresh_token());
     }
 }
