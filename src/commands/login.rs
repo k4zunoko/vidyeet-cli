@@ -1,7 +1,7 @@
 /// ログインコマンド
 ///
-/// api.videoのAPIキーを使用してログインし、
-/// リフレッシュトークンをconfig.tomlに保存します。
+/// Mux Video APIのAccess Token (ID + Secret)を使用してログインし、
+/// 認証情報をconfig.tomlに保存します。
 use crate::api::auth::AuthManager;
 use crate::config::user::UserConfig;
 use anyhow::{Context, Result};
@@ -9,58 +9,61 @@ use std::io::{self, Write};
 
 /// ログインコマンドを実行
 ///
-/// # Arguments
-/// * `api_key_arg` - コマンドライン引数から渡されたAPIキー（オプション）
-///
 /// # Returns
 /// 成功時はOk(())、失敗時はエラー
-pub async fn execute(api_key_arg: Option<String>) -> Result<()> {
-    println!("Logging in to api.video...\n");
+pub async fn execute() -> Result<()> {
+    println!("Logging in to Mux Video...\n");
+    println!("Please enter your Mux Access Token credentials.");
+    println!("You can find them at: https://dashboard.mux.com/settings/access-tokens\n");
 
-    // APIキーの取得（引数またはプロンプト）
-    let api_key = match api_key_arg {
-        Some(key) => key,
-        std::option::Option::None => {
-            print!("Enter your API key: ");
-            io::stdout().flush()?;
-            
-            // APIキーを標準入力から読み取り
-            let mut input = String::new();
-            io::stdin()
-                .read_line(&mut input)
-                .context("Failed to read API key from input")?;
-            
-            input.trim().to_string()
-        }
-    };
+    // Token IDの取得
+    print!("Access Token ID: ");
+    io::stdout().flush()?;
+    let mut token_id = String::new();
+    io::stdin()
+        .read_line(&mut token_id)
+        .context("Failed to read Token ID from input")?;
+    let token_id = token_id.trim().to_string();
 
-    if api_key.is_empty() {
-        anyhow::bail!("API key cannot be empty. Please provide a valid API key.");
+    if token_id.is_empty() {
+        anyhow::bail!("Token ID cannot be empty. Please provide a valid Token ID.");
+    }
+
+    // Token Secretの取得
+    print!("Access Token Secret: ");
+    io::stdout().flush()?;
+    let mut token_secret = String::new();
+    io::stdin()
+        .read_line(&mut token_secret)
+        .context("Failed to read Token Secret from input")?;
+    let token_secret = token_secret.trim().to_string();
+
+    if token_secret.is_empty() {
+        anyhow::bail!("Token Secret cannot be empty. Please provide a valid Token Secret.");
     }
 
     // 認証マネージャーを作成
-    let mut auth_manager = AuthManager::new()
-        .context("Failed to initialize authentication manager")?;
+    let auth_manager = AuthManager::new(token_id.clone(), token_secret.clone());
 
-    // ログイン実行
-    println!("Authenticating...");
-    let refresh_token = auth_manager
-        .login(&api_key)
+    // 認証情報をテスト
+    println!("\nVerifying credentials...");
+    auth_manager
+        .test_credentials()
         .await
-        .context("Login failed. Please verify your API key is correct.")?;
+        .context("Authentication failed. Please verify your Token ID and Secret are correct.")?;
 
-    // UserConfigをロードしてリフレッシュトークンを保存
+    // UserConfigをロードして認証情報を保存
     let mut config = UserConfig::load()
         .context("Failed to load configuration file")?;
     
-    config.set_refresh_token(refresh_token);
+    config.set_auth(token_id, token_secret);
     
     config
         .save()
         .context("Failed to save configuration file")?;
 
     println!("\n✓ Login successful!");
-    println!("Refresh token has been saved.");
+    println!("Authentication credentials have been saved.");
 
     Ok(())
 }

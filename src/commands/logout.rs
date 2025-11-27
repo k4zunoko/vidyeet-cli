@@ -1,6 +1,6 @@
 /// ログアウトコマンド
 ///
-/// 保存されているリフレッシュトークンを削除します。
+/// 保存されている認証情報を削除します。
 use crate::config::user::UserConfig;
 use anyhow::{Context, Result};
 
@@ -9,20 +9,20 @@ use anyhow::{Context, Result};
 /// # Returns
 /// 成功時はOk(())、失敗時はエラー
 pub async fn execute() -> Result<()> {
-    println!("Logging out from api.video...\n");
+    println!("Logging out from Mux Video...\n");
 
     // UserConfigをロード
     let mut config = UserConfig::load()
         .context("Failed to load configuration file")?;
 
-    // リフレッシュトークンが存在するか確認
-    if !config.has_refresh_token() {
+    // 認証情報が存在するか確認
+    if !config.has_auth() {
         println!("Already logged out.");
         return Ok(());
     }
 
-    // リフレッシュトークンをクリア
-    config.clear_refresh_token();
+    // 認証情報をクリア
+    config.clear_auth();
 
     // 設定を保存
     config
@@ -30,7 +30,7 @@ pub async fn execute() -> Result<()> {
         .context("Failed to save configuration file")?;
 
     println!("✓ Logged out successfully.");
-    println!("Refresh token has been removed.");
+    println!("Authentication credentials have been removed.");
 
     Ok(())
 }
@@ -41,7 +41,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_logout_without_token() {
-        // リフレッシュトークンが存在しない状態でもエラーにならないことを確認
+        // 認証情報が存在しない状態でもエラーにならないことを確認
         let result = execute().await;
         // 設定ファイルが存在しない場合はエラーになる可能性があるため、
         // 実際のテストは統合テストで実施

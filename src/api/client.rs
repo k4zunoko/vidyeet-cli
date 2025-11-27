@@ -1,10 +1,10 @@
 /// HTTPクライアント
 ///
-/// api.videoとの通信を担当する汎用HTTPクライアント。
-/// タイムアウト、エラーハンドリング、リトライロジックを含みます。
+/// Mux Videoとの通信を担当するHTTPクライアント。
+/// タイムアウト、エラーハンドリング、HTTP Basic認証を含みます。
 use crate::api::error::InfraError;
 use crate::config::APP_CONFIG;
-use reqwest::{Client, Response, StatusCode};
+use reqwest::{Client, Response};
 use std::time::Duration;
 
 /// APIクライアント
@@ -17,7 +17,7 @@ impl ApiClient {
     /// 新しいAPIクライアントを作成
     ///
     /// # Arguments
-    /// * `base_url` - APIのベースURL（例: "https://ws.api.video"）
+    /// * `base_url` - APIのベースURL（例: "https://api.mux.com"）
     ///
     /// # Returns
     /// 設定済みのAPIクライアント
@@ -37,30 +37,130 @@ impl ApiClient {
         Self::new(APP_CONFIG.api.endpoint.to_string())
     }
 
+    /// GETリクエストを送信
+    ///
+    /// # Arguments
+    /// * `endpoint` - エンドポイントパス（例: "/video/v1/assets"）
+    /// * `auth_header` - HTTP Basic認証ヘッダー（オプション）
+    pub async fn get(
+        &self,
+        endpoint: &str,
+        auth_header: Option<&str>,
+    ) -> Result<Response, InfraError> {
+        let url = format!("{}{}", self.base_url, endpoint);
+
+        let mut request = self.client.get(&url);
+
+        if let Some(auth) = auth_header {
+            request = request.header("Authorization", auth);
+        }
+
+        let response = request.send().await.map_err(|e| {
+            if e.is_timeout() {
+                InfraError::Timeout {
+                    operation: format!("GET {}", endpoint),
+                }
+            } else if e.is_connect() {
+                InfraError::network(format!("Connection failed to {}: {}", url, e))
+            } else {
+                InfraError::network(format!("Request failed: {}", e))
+            }
+        })?;
+
+        Ok(response)
+    }
+
     /// POSTリクエストを送信
     ///
     /// # Arguments
-    /// * `endpoint` - エンドポイントパス（例: "/auth/api-key"）
+    /// * `endpoint` - エンドポイントパス（例: "/video/v1/uploads"）
     /// * `body` - リクエストボディ（JSON）
-    /// * `bearer_token` - Bearerトークン（オプション）
+    /// * `auth_header` - HTTP Basic認証ヘッダー（オプション）
     pub async fn post<T: serde::Serialize>(
         &self,
         endpoint: &str,
         body: &T,
-        bearer_token: Option<&str>,
+        auth_header: Option<&str>,
     ) -> Result<Response, InfraError> {
         let url = format!("{}{}", self.base_url, endpoint);
 
         let mut request = self.client.post(&url).json(body);
 
-        if let Some(token) = bearer_token {
-            request = request.header("Authorization", format!("Bearer {}", token));
+        if let Some(auth) = auth_header {
+            request = request.header("Authorization", auth);
         }
 
         let response = request.send().await.map_err(|e| {
             if e.is_timeout() {
                 InfraError::Timeout {
                     operation: format!("POST {}", endpoint),
+                }
+            } else if e.is_connect() {
+                InfraError::network(format!("Connection failed to {}: {}", url, e))
+            } else {
+                InfraError::network(format!("Request failed: {}", e))
+            }
+        })?;
+
+        Ok(response)
+    }
+
+    /// PUTリクエストを送信（ファイルアップロード用）
+    ///
+    /// # Arguments
+    /// * `url` - 完全なURL（Mux Direct UploadのURL）
+    /// * `body` - アップロードするデータ（バイト列）
+    /// * `content_type` - Content-Typeヘッダー
+    pub async fn put(
+        &self,
+        url: &str,
+        body: Vec<u8>,
+        content_type: &str,
+    ) -> Result<Response, InfraError> {
+        let response = self
+            .client
+            .put(url)
+            .header("Content-Type", content_type)
+            .body(body)
+            .send()
+            .await
+            .map_err(|e| {
+                if e.is_timeout() {
+                    InfraError::Timeout {
+                        operation: format!("PUT {}", url),
+                    }
+                } else if e.is_connect() {
+                    InfraError::network(format!("Connection failed to {}: {}", url, e))
+                } else {
+                    InfraError::network(format!("Request failed: {}", e))
+                }
+            })?;
+
+        Ok(response)
+    }
+
+    /// DELETEリクエストを送信
+    ///
+    /// # Arguments
+    /// * `endpoint` - エンドポイントパス（例: "/video/v1/assets/{ASSET_ID}"）
+    /// * `auth_header` - HTTP Basic認証ヘッダー（オプション）
+    pub async fn delete(
+        &self,
+        endpoint: &str,
+        auth_header: Option<&str>,
+    ) -> Result<Response, InfraError> {
+        let url = format!("{}{}", self.base_url, endpoint);
+
+        let mut request = self.client.delete(&url);
+
+        if let Some(auth) = auth_header {
+            request = request.header("Authorization", auth);
+        }
+
+        let response = request.send().await.map_err(|e| {
+            if e.is_timeout() {
+                InfraError::Timeout {
+                    operation: format!("DELETE {}", endpoint),
                 }
             } else if e.is_connect() {
                 InfraError::network(format!("Connection failed to {}: {}", url, e))
@@ -116,7 +216,7 @@ mod tests {
 
     #[test]
     fn test_client_creation() {
-        let client = ApiClient::new("https://ws.api.video".to_string());
+        let client = ApiClient::new("https://api.mux.com".to_string());
         assert!(client.is_ok());
     }
 

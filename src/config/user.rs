@@ -15,14 +15,24 @@ const DEFAULT_TITLE: &str = "My Video";
 const DEFAULT_AUTO_COPY_URL: bool = false;
 const DEFAULT_SHOW_NOTIFICATION: bool = false;
 
+/// Mux認証設定
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthConfig {
+    /// Mux Access Token ID
+    pub token_id: String,
+
+    /// Mux Access Token Secret
+    pub token_secret: String,
+}
+
 /// ユーザー設定
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserConfig {
     /// デフォルトのビデオタイトル
     pub default_title: Option<String>,
 
-    /// リフレッシュトークン（api.video認証用）
-    pub refresh_token: Option<String>,
+    /// Mux認証情報
+    pub auth: Option<AuthConfig>,
 
     /// アップロード後に自動的にURLをクリップボードにコピーするか
     #[serde(default = "default_auto_copy_url")]
@@ -46,7 +56,7 @@ impl Default for UserConfig {
     fn default() -> Self {
         Self {
             default_title: Some(DEFAULT_TITLE.to_string()),
-            refresh_token: None,
+            auth: None,
             auto_copy_url: DEFAULT_AUTO_COPY_URL,
             show_notification: DEFAULT_SHOW_NOTIFICATION,
         }
@@ -135,7 +145,7 @@ impl UserConfig {
     /// これにより、Rust側のデフォルト値とTOMLテンプレートの同期が保証されます。
     fn default_toml_content() -> String {
         format!(
-            r#"# api.video CLI - User Configuration
+            r#"# Mux Video CLI - User Configuration
 # 認証情報は 'vidyeet login' で設定されます
 default_title = "{}"
 auto_copy_url = {}
@@ -206,31 +216,34 @@ show_notification = {}
         Ok(())
     }
 
-    /// リフレッシュトークンを設定
-    pub fn set_refresh_token(&mut self, token: String) {
-        self.refresh_token = Some(token);
+    /// 認証情報を設定
+    pub fn set_auth(&mut self, token_id: String, token_secret: String) {
+        self.auth = Some(AuthConfig {
+            token_id,
+            token_secret,
+        });
     }
 
-    /// リフレッシュトークンを取得
+    /// 認証情報を取得
     ///
     /// # Errors
-    /// トークンが設定されていない場合に ConfigError::TokenNotFound を返します。
-    pub fn get_refresh_token(&self) -> Result<&str, ConfigError> {
-        self.refresh_token
-            .as_deref()
+    /// 認証情報が設定されていない場合に ConfigError::TokenNotFound を返します。
+    pub fn get_auth(&self) -> Result<&AuthConfig, ConfigError> {
+        self.auth
+            .as_ref()
             .ok_or_else(|| ConfigError::TokenNotFound {
-                message: "Token not found. Please run 'vidyeet login' first.".to_string(),
+                message: "Authentication credentials not found. Please run 'vidyeet login' first.".to_string(),
             })
     }
 
-    /// リフレッシュトークンが存在するかチェック
-    pub fn has_refresh_token(&self) -> bool {
-        self.refresh_token.is_some()
+    /// 認証情報が存在するかチェック
+    pub fn has_auth(&self) -> bool {
+        self.auth.is_some()
     }
 
-    /// リフレッシュトークンを削除
-    pub fn clear_refresh_token(&mut self) {
-        self.refresh_token = None;
+    /// 認証情報を削除
+    pub fn clear_auth(&mut self) {
+        self.auth = None;
     }
 }
 
@@ -240,49 +253,51 @@ mod tests {
     use std::fs;
 
     #[test]
-    fn test_has_refresh_token() {
-        // リフレッシュトークンの有無を正しく判定できることを確認
+    fn test_has_auth() {
+        // 認証情報の有無を正しく判定できることを確認
         let mut config = UserConfig {
             default_title: None,
-            refresh_token: None,
+            auth: None,
             auto_copy_url: false,
             show_notification: true,
         };
 
-        assert!(!config.has_refresh_token());
+        assert!(!config.has_auth());
 
-        config.set_refresh_token("test_refresh_token_1234567890".to_string());
-        assert!(config.has_refresh_token());
+        config.set_auth("test_token_id".to_string(), "test_token_secret".to_string());
+        assert!(config.has_auth());
     }
 
     #[test]
-    fn test_get_refresh_token() {
-        // リフレッシュトークンの取得が正しく動作することを確認
+    fn test_get_auth() {
+        // 認証情報の取得が正しく動作することを確認
         let mut config = UserConfig::default();
         
-        // トークンが未設定の場合はエラー
-        let result = config.get_refresh_token();
+        // 認証情報が未設定の場合はエラー
+        let result = config.get_auth();
         assert!(result.is_err());
         if let Err(ConfigError::TokenNotFound { message }) = result {
             assert!(message.contains("login"));
         }
         
-        // トークン設定後は取得できる
-        config.set_refresh_token("test_token".to_string());
-        assert_eq!(config.get_refresh_token().unwrap(), "test_token");
+        // 認証情報設定後は取得できる
+        config.set_auth("test_id".to_string(), "test_secret".to_string());
+        let auth = config.get_auth().unwrap();
+        assert_eq!(auth.token_id, "test_id");
+        assert_eq!(auth.token_secret, "test_secret");
     }
 
     #[test]
-    fn test_clear_refresh_token() {
-        // リフレッシュトークンのクリアが正しく動作することを確認
+    fn test_clear_auth() {
+        // 認証情報のクリアが正しく動作することを確認
         let mut config = UserConfig::default();
-        config.set_refresh_token("test_token".to_string());
+        config.set_auth("test_id".to_string(), "test_secret".to_string());
         
-        assert!(config.has_refresh_token());
+        assert!(config.has_auth());
         
-        config.clear_refresh_token();
-        assert!(!config.has_refresh_token());
-        assert!(config.get_refresh_token().is_err());
+        config.clear_auth();
+        assert!(!config.has_auth());
+        assert!(config.get_auth().is_err());
     }
 
     #[test]
@@ -306,11 +321,11 @@ mod tests {
         // テスト用の設定を作成
         let mut test_config = UserConfig {
             default_title: Some("Test Video Title".to_string()),
-            refresh_token: None,
+            auth: None,
             auto_copy_url: true,
             show_notification: false,
         };
-        test_config.set_refresh_token("test_refresh_token_xyz".to_string());
+        test_config.set_auth("test_id_xyz".to_string(), "test_secret_xyz".to_string());
 
         // 保存を実行
         test_config.save().expect("Failed to save config");
@@ -322,9 +337,15 @@ mod tests {
         let loaded_config = UserConfig::load().expect("Failed to load config");
 
         // 値が一致することを確認
+        let loaded_auth = loaded_config.get_auth().expect("Auth should be present");
+        let test_auth = test_config.get_auth().expect("Auth should be present");
         assert_eq!(
-            loaded_config.refresh_token, test_config.refresh_token,
-            "Refresh tokens should match"
+            loaded_auth.token_id, test_auth.token_id,
+            "Token IDs should match"
+        );
+        assert_eq!(
+            loaded_auth.token_secret, test_auth.token_secret,
+            "Token secrets should match"
         );
         assert_eq!(
             loaded_config.default_title, test_config.default_title,
@@ -350,7 +371,10 @@ mod tests {
             // テスト用の設定を保存
             let test_config = UserConfig {
                 default_title: None,
-                refresh_token: Some("test_token".to_string()),
+                auth: Some(AuthConfig {
+                    token_id: "test_token_id".to_string(),
+                    token_secret: "test_token_secret".to_string(),
+                }),
                 auto_copy_url: false,
                 show_notification: true,
             };
@@ -394,7 +418,10 @@ mod tests {
         // 設定のシリアライゼーションが正しく動作することを確認
         let config = UserConfig {
             default_title: Some("My Video".to_string()),
-            refresh_token: Some("test_refresh_token".to_string()),
+            auth: Some(AuthConfig {
+                token_id: "test_token_id".to_string(),
+                token_secret: "test_token_secret".to_string(),
+            }),
             auto_copy_url: true,
             show_notification: false,
         };
@@ -403,8 +430,9 @@ mod tests {
         let serialized = toml::to_string_pretty(&config).expect("Failed to serialize");
 
         // 必要なフィールドが含まれていることを確認
-        assert!(serialized.contains("refresh_token"));
-        assert!(serialized.contains("test_refresh_token"));
+        assert!(serialized.contains("auth"));
+        assert!(serialized.contains("token_id"));
+        assert!(serialized.contains("token_secret"));
         assert!(serialized.contains("default_title"));
         assert!(serialized.contains("auto_copy_url"));
         assert!(serialized.contains("show_notification"));
@@ -415,7 +443,7 @@ mod tests {
         // 認証はloginコマンドで管理されるため、validate()は常に成功する
         let config = UserConfig {
             default_title: None,
-            refresh_token: None,
+            auth: None,
             auto_copy_url: false,
             show_notification: true,
         };

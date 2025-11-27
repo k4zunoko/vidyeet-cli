@@ -22,7 +22,6 @@ pub mod error;
 pub mod user;
 
 pub use app::APP_CONFIG;
-pub use error::ConfigError;
 pub use user::UserConfig;
 
 #[cfg(test)]
@@ -32,7 +31,7 @@ mod tests {
     #[test]
     fn test_app_config_direct_access() {
         // APP_CONFIGがグローバル定数として直接アクセス可能であることを確認
-        assert_eq!(APP_CONFIG.api.endpoint, "https://ws.api.video");
+        assert_eq!(APP_CONFIG.api.endpoint, "https://api.mux.com");
         assert_eq!(APP_CONFIG.api.timeout_seconds, 30);
         assert!(!APP_CONFIG.upload.supported_formats.is_empty());
     }
@@ -51,7 +50,7 @@ mod tests {
         assert!(result.is_ok(), "Default config should load successfully");
 
         let config = result.unwrap();
-        assert!(!config.has_refresh_token(), "Default config should not have refresh token");
+        assert!(!config.has_auth(), "Default config should not have auth");
     }
 
     #[test]
@@ -62,14 +61,14 @@ mod tests {
             std::fs::remove_file(&config_path).ok();
         }
 
-        // リフレッシュトークンで設定を作成
+        // 認証情報で設定を作成
         let mut config = UserConfig {
             default_title: Some("Test Title".to_string()),
-            refresh_token: None,
+            auth: None,
             auto_copy_url: true,
             show_notification: false,
         };
-        config.set_refresh_token("test_refresh_token_xyz".to_string());
+        config.set_auth("test_id".to_string(), "test_secret".to_string());
 
         // 検証が通ることを確認
         assert!(config.validate().is_ok());
@@ -79,7 +78,10 @@ mod tests {
 
         // 再読み込み（自動検証される）
         let reloaded = UserConfig::load().expect("Failed to reload config");
-        assert_eq!(reloaded.refresh_token, config.refresh_token);
+        let reloaded_auth = reloaded.get_auth().expect("Auth should be present");
+        let config_auth = config.get_auth().expect("Auth should be present");
+        assert_eq!(reloaded_auth.token_id, config_auth.token_id);
+        assert_eq!(reloaded_auth.token_secret, config_auth.token_secret);
         assert_eq!(reloaded.default_title, config.default_title);
     }
 
@@ -94,14 +96,14 @@ mod tests {
         // UserConfig: 有効な設定を作成してテスト
         let mut user_config = UserConfig {
             default_title: Some("My Video".to_string()),
-            refresh_token: None,
+            auth: None,
             auto_copy_url: true,
             show_notification: true,
         };
-        user_config.set_refresh_token("test_refresh_token_abc".to_string());
+        user_config.set_auth("test_id".to_string(), "test_secret".to_string());
 
         // 検証が通ることを確認
         assert!(user_config.validate().is_ok());
-        assert!(user_config.has_refresh_token());
+        assert!(user_config.has_auth());
     }
 }
