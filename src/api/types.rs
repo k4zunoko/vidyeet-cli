@@ -180,7 +180,7 @@ mod tests {
                 "timeout": 3600,
                 "status": "waiting",
                 "new_asset_settings": {
-                    "playback_policy": ["public"],
+                    "playback_policies": ["public"],
                     "video_quality": "basic"
                 },
                 "asset_id": null,

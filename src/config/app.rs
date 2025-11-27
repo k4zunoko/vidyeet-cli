@@ -74,6 +74,28 @@ impl AppConfig {
 /// コンパイル時に評価され、実行時のコストはゼロです。
 pub const APP_CONFIG: AppConfig = AppConfig::new();
 
+impl UploadConfig {
+    /// 拡張子からContent-Typeを取得
+    ///
+    /// # 引数
+    /// * `extension` - ファイル拡張子（例: "mp4", "mov"）
+    ///
+    /// # 戻り値
+    /// Content-Type文字列、サポートされていない場合は "application/octet-stream"
+    pub fn get_content_type(&self, extension: &str) -> &'static str {
+        match extension {
+            "mp4" => "video/mp4",
+            "mov" => "video/quicktime",
+            "avi" => "video/x-msvideo",
+            "wmv" => "video/x-ms-wmv",
+            "flv" => "video/x-flv",
+            "mkv" => "video/x-matroska",
+            "webm" => "video/webm",
+            _ => "application/octet-stream",
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -104,5 +126,23 @@ mod tests {
         assert!(formats.contains(&"mp4"));
         assert!(formats.contains(&"mov"));
         assert!(formats.contains(&"webm"));
+    }
+
+    #[test]
+    fn test_get_content_type() {
+        // Content-Type変換が正しく動作することを確認
+        let upload_config = &APP_CONFIG.upload;
+        
+        assert_eq!(upload_config.get_content_type("mp4"), "video/mp4");
+        assert_eq!(upload_config.get_content_type("mov"), "video/quicktime");
+        assert_eq!(upload_config.get_content_type("avi"), "video/x-msvideo");
+        assert_eq!(upload_config.get_content_type("wmv"), "video/x-ms-wmv");
+        assert_eq!(upload_config.get_content_type("flv"), "video/x-flv");
+        assert_eq!(upload_config.get_content_type("mkv"), "video/x-matroska");
+        assert_eq!(upload_config.get_content_type("webm"), "video/webm");
+        
+        // サポートされていない拡張子
+        assert_eq!(upload_config.get_content_type("unknown"), "application/octet-stream");
+        assert_eq!(upload_config.get_content_type("txt"), "application/octet-stream");
     }
 }

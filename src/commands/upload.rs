@@ -151,7 +151,7 @@ async fn create_direct_upload(
     // Direct Upload作成リクエスト
     let request_body = serde_json::json!({
         "new_asset_settings": {
-            "playback_policy": ["public"]
+            "playback_policies": ["public"]
         }
     });
 
@@ -181,20 +181,12 @@ async fn upload_file(
         .await
         .context("Failed to read file")?;
 
-    // ファイルの拡張子からContent-Typeを推定
-    let content_type = match std::path::Path::new(file_path)
+    // ファイルの拡張子からContent-Typeを推定（APP_CONFIGで一元管理）
+    let content_type = std::path::Path::new(file_path)
         .extension()
         .and_then(|e| e.to_str())
-    {
-        Some("mp4") => "video/mp4",
-        Some("mov") => "video/quicktime",
-        Some("avi") => "video/x-msvideo",
-        Some("wmv") => "video/x-ms-wmv",
-        Some("flv") => "video/x-flv",
-        Some("mkv") => "video/x-matroska",
-        Some("webm") => "video/webm",
-        _ => "application/octet-stream",
-    };
+        .map(|ext| APP_CONFIG.upload.get_content_type(ext))
+        .unwrap_or("application/octet-stream");
 
     // PUTリクエストでファイルをアップロード
     let response = client
