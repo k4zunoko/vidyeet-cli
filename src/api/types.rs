@@ -34,18 +34,21 @@ pub struct DirectUploadData {
     pub error: Option<UploadError>,
 
     /// CORSオリジン
-    pub cors_origin: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cors_origin: Option<String>,
 
     /// アップロードURL
-    pub url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
 
     /// テストアップロードかどうか
-    pub test: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub test: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewAssetSettings {
-    pub playback_policy: Vec<String>,
+    pub playback_policies: Vec<String>,
     
     #[serde(skip_serializing_if = "Option::is_none")]
     pub video_quality: Option<String>,
@@ -141,12 +144,13 @@ pub struct AssetsListResponse {
 impl DirectUploadResponse {
     /// レスポンスが有効かチェック
     pub fn is_valid(&self) -> bool {
-        !self.data.id.is_empty() && !self.data.url.is_empty()
+        !self.data.id.is_empty() 
+            && self.data.url.as_ref().map_or(false, |u| !u.is_empty())
     }
 
     /// アップロードURLを取得
-    pub fn get_upload_url(&self) -> &str {
-        &self.data.url
+    pub fn get_upload_url(&self) -> Option<&str> {
+        self.data.url.as_deref()
     }
 
     /// Upload IDを取得

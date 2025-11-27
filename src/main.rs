@@ -8,6 +8,7 @@ mod error_severity;
 use anyhow::Result;
 use api::error::InfraError;
 use config::error::ConfigError;
+use config::user::UserConfig;
 use domain::error::DomainError;
 use std::env;
 
@@ -22,6 +23,10 @@ async fn main() {
 
 /// アプリケーションのメイン処理
 async fn run(args: &[String]) -> Result<()> {
+    // アプリケーション起動時に設定ファイルが存在することを保証
+    // 存在しない場合はデフォルト設定から自動生成される
+    UserConfig::ensure_config_exists()?;
+
     cli::parse_args(args).await
 }
 

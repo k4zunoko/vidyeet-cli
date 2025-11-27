@@ -53,7 +53,7 @@ impl AppConfig {
         Self {
             api: ApiConfig {
                 endpoint: "https://api.mux.com",
-                timeout_seconds: 30,
+                timeout_seconds: 300, // 5分（大きなファイルアップロード用）
                 max_retries: 3,
             },
             upload: UploadConfig {

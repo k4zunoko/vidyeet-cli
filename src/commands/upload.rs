@@ -64,11 +64,14 @@ pub async fn execute(file_path: &str) -> Result<()> {
         .context("Failed to create Direct Upload")?;
 
     println!("✓ Direct Upload created: {}", upload.data.id);
-    println!("  Upload URL: {}", upload.data.url);
+    
+    let upload_url = upload.data.url.as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Upload URL not found in response"))?;
+    println!("  Upload URL: {}", upload_url);
 
     // ファイルをアップロード
     println!("\nUploading file...");
-    upload_file(&client, &upload.data.url, file_path).await
+    upload_file(&client, upload_url, file_path).await
         .context("Failed to upload file")?;
 
     println!("✓ File uploaded successfully");

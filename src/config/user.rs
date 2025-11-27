@@ -113,6 +113,23 @@ impl UserConfig {
         Ok(config)
     }
 
+    /// 設定ファイルの存在を確認し、存在しない場合は作成する
+    ///
+    /// アプリケーション起動時に呼び出され、設定ファイルが必ず存在することを保証します。
+    /// このメソッドはファイル作成のみを行い、読み込みや検証は行いません。
+    ///
+    /// # Errors
+    /// ディレクトリの作成またはファイルの書き込みに失敗した場合に ConfigError を返します。
+    pub fn ensure_config_exists() -> Result<(), ConfigError> {
+        let config_path = Self::config_path()?;
+
+        if !config_path.exists() {
+            Self::create_default_config(&config_path)?;
+        }
+
+        Ok(())
+    }
+
     /// デフォルト設定ファイルを作成
     ///
     /// # Errors
