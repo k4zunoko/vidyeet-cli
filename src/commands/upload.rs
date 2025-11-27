@@ -23,17 +23,7 @@ const UPLOAD_MAX_WAIT_SECS: u64 = 300; // 5分
 /// このレイヤーでは anyhow::Result を返し、
 /// ドメイン層・インフラ層のエラーを集約する。
 
-pub fn execute(file_path: &str) -> Result<()> {
-    // 非同期ランタイムを作成して実行
-    let rt = tokio::runtime::Runtime::new()
-        .context("Failed to create Tokio runtime")?;
-    
-    rt.block_on(async {
-        execute_async(file_path).await
-    })
-}
-
-async fn execute_async(file_path: &str) -> Result<()> {
+pub async fn execute(file_path: &str) -> Result<()> {
     println!("Uploading to Mux Video...\n");
 
     // ユーザー設定を読み込み

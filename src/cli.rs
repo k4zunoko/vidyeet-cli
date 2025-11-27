@@ -25,7 +25,9 @@ pub async fn parse_args(args: &[String]) -> Result<()> {
             let file_path = args
                 .get(2)
                 .context("Please specify a file path for upload command")?;
-            commands::upload::execute(file_path).context("Upload command failed")
+            commands::upload::execute(file_path)
+                .await
+                .context("Upload command failed")
         }
         "help" => {
             commands::help::execute();

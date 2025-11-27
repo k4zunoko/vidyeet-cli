@@ -206,13 +206,25 @@ show_notification = {}
     /// Fail Fast: 設定に問題がある場合は即座にエラーを返します。
     ///
     /// # 検証内容
-    /// - 現在は特に検証項目はありません
-    ///   (認証は login コマンドで管理されます)
+    /// - auth.token_id: 空文字列でないこと
+    /// - auth.token_secret: 空文字列でないこと
     ///
     /// # Errors
     /// 検証に失敗した場合に ConfigError::ValidationError を返します。
     pub fn validate(&self) -> Result<(), ConfigError> {
-        // 認証は login コマンドで管理されるため、ここでの検証は不要
+        // 認証情報が存在する場合、内容を検証
+        if let Some(auth) = &self.auth {
+            if auth.token_id.trim().is_empty() {
+                return Err(ConfigError::ValidationError {
+                    message: "Authentication token_id cannot be empty. Please run 'vidyeet login' again.".to_string(),
+                });
+            }
+            if auth.token_secret.trim().is_empty() {
+                return Err(ConfigError::ValidationError {
+                    message: "Authentication token_secret cannot be empty. Please run 'vidyeet login' again.".to_string(),
+                });
+            }
+        }
         Ok(())
     }
 
@@ -439,14 +451,54 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_always_succeeds() {
-        // 認証はloginコマンドで管理されるため、validate()は常に成功する
+    fn test_validate_accepts_config_without_auth() {
+        // 認証情報なしの設定は有効
         let config = UserConfig {
             default_title: None,
             auth: None,
             auto_copy_url: false,
             show_notification: true,
         };
+
+        let result = config.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_rejects_empty_token_id() {
+        // 空のtoken_idは検証エラー
+        let mut config = UserConfig::default();
+        config.set_auth("".to_string(), "valid_secret".to_string());
+
+        let result = config.validate();
+        assert!(result.is_err());
+        if let Err(ConfigError::ValidationError { message }) = result {
+            assert!(message.contains("token_id"));
+        } else {
+            panic!("Expected ValidationError for empty token_id");
+        }
+    }
+
+    #[test]
+    fn test_validate_rejects_empty_token_secret() {
+        // 空のtoken_secretは検証エラー
+        let mut config = UserConfig::default();
+        config.set_auth("valid_id".to_string(), "".to_string());
+
+        let result = config.validate();
+        assert!(result.is_err());
+        if let Err(ConfigError::ValidationError { message }) = result {
+            assert!(message.contains("token_secret"));
+        } else {
+            panic!("Expected ValidationError for empty token_secret");
+        }
+    }
+
+    #[test]
+    fn test_validate_accepts_valid_auth() {
+        // 有効な認証情報は検証をパス
+        let mut config = UserConfig::default();
+        config.set_auth("valid_id".to_string(), "valid_secret".to_string());
 
         let result = config.validate();
         assert!(result.is_ok());
