@@ -83,12 +83,38 @@ pub async fn execute(file_path: &str) -> Result<()> {
 
     // 結果を表示
     println!("\n✓ Upload completed!");
+    println!("  Asset ID: {}", asset.data.id);
+    println!("  Status: {}", asset.data.status);
+    
+    // HLS再生URL（ストリーミング用）を表示
     if let Some(playback_url) = asset.get_playback_url() {
-        println!("  Playback URL: {}", playback_url);
+        println!("\n  HLS Playback URL (for streaming):");
+        println!("    {}", playback_url);
+    }
+    
+    // MP4再生URL（ダウンロード/直接再生用）を表示
+    println!("\n  MP4 Playback URL (for download/direct playback):");
+    if let Some(mp4_url) = asset.get_mp4_playback_url() {
+        println!("    {}", mp4_url);
         
-        // 自動コピー設定があればクリップボードにコピー
+        // 自動コピー設定があればMP4 URLをクリップボードにコピー
         if user_config.auto_copy_url {
-            println!("  (URL copied to clipboard)");
+            println!("    (MP4 URL copied to clipboard)");
+        }
+    } else {
+        // MP4はバックグラウンドで生成されるため、通常は処理中
+        println!("    Status: Processing...");
+        println!("    Note: MP4 file is being generated in the background.");
+        println!("          This usually takes a few minutes depending on video length.");
+        println!("          You can check the asset status later to get the MP4 URL.");
+        
+        // Static renditionsの状態を表示
+        if let Some(renditions) = &asset.data.static_renditions {
+            for rendition in renditions {
+                if rendition.ext == "mp4" {
+                    println!("          Current MP4 status: {}", rendition.status);
+                }
+            }
         }
     }
 
@@ -151,7 +177,10 @@ async fn create_direct_upload(
     // Direct Upload作成リクエスト
     let request_body = serde_json::json!({
         "new_asset_settings": {
-            "playback_policies": ["public"]
+            "playback_policies": ["public"],
+            "static_renditions": [
+                { "resolution": "highest" },   // 最大解像度のMP4
+            ]
         }
     });
 

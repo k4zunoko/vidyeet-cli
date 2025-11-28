@@ -113,6 +113,10 @@ pub struct AssetData {
     /// ビデオ品質
     #[serde(skip_serializing_if = "Option::is_none")]
     pub video_quality: Option<String>,
+
+    /// Static Renditions（MP4など）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub static_renditions: Option<Vec<StaticRendition>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -128,6 +132,28 @@ pub struct Track {
     
     #[serde(skip_serializing_if = "Option::is_none")]
     pub duration: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StaticRendition {
+    /// Rendition ID
+    pub id: String,
+
+    /// Renditionのタイプ（例: "standard"）
+    #[serde(rename = "type")]
+    pub rendition_type: String,
+
+    /// ステータス（preparing, ready, errored, skipped, deleted）
+    pub status: String,
+
+    /// 解像度（highest, 1080p, 720pなど）
+    pub resolution: String,
+
+    /// ファイル名（例: "highest.mp4"）
+    pub name: String,
+
+    /// ファイル拡張子（例: "mp4", "m4a"）
+    pub ext: String,
 }
 
 /// アセット一覧レスポンス
@@ -160,11 +186,24 @@ impl DirectUploadResponse {
 }
 
 impl AssetResponse {
-    /// 再生URLを構築
+    /// 再生URLを構築（HLS形式）
     pub fn get_playback_url(&self) -> Option<String> {
         self.data.playback_ids.first().map(|playback_id| {
             format!("https://stream.mux.com/{}.m3u8", playback_id.id)
         })
+    }
+
+    /// MP4再生URLを構築
+    /// 
+    /// static_renditionsから最初のready状態のMP4を探し、
+    /// playback_idと組み合わせてMP4のストリーミングURLを返します。
+    pub fn get_mp4_playback_url(&self) -> Option<String> {
+        let playback_id = self.data.playback_ids.first()?;
+        let rendition = self.data.static_renditions.as_ref()?
+            .iter()
+            .find(|r| r.status == "ready" && r.ext == "mp4")?;
+        
+        Some(format!("https://stream.mux.com/{}/{}", playback_id.id, rendition.name))
     }
 }
 
@@ -214,12 +253,66 @@ mod tests {
                 created_at: "1609869152".to_string(),
                 aspect_ratio: Some("16:9".to_string()),
                 video_quality: Some("basic".to_string()),
+                static_renditions: None,
             },
         };
 
         let url = response.get_playback_url();
         assert!(url.is_some());
         assert_eq!(url.unwrap(), "https://stream.mux.com/playback_xyz.m3u8");
+    }
+
+    #[test]
+    fn test_asset_response_mp4_playback_url() {
+        // MP4 renditionがreadyの場合
+        let response_with_mp4 = AssetResponse {
+            data: AssetData {
+                id: "asset_456".to_string(),
+                status: "ready".to_string(),
+                playback_ids: vec![PlaybackId {
+                    id: "playback_abc".to_string(),
+                    policy: "public".to_string(),
+                }],
+                tracks: None,
+                duration: Some(60.0),
+                created_at: "1609869152".to_string(),
+                aspect_ratio: Some("16:9".to_string()),
+                video_quality: Some("basic".to_string()),
+                static_renditions: Some(vec![StaticRendition {
+                    id: "rendition_123".to_string(),
+                    rendition_type: "standard".to_string(),
+                    status: "ready".to_string(),
+                    resolution: "highest".to_string(),
+                    name: "highest.mp4".to_string(),
+                    ext: "mp4".to_string(),
+                }]),
+            },
+        };
+
+        let mp4_url = response_with_mp4.get_mp4_playback_url();
+        assert!(mp4_url.is_some());
+        assert_eq!(mp4_url.unwrap(), "https://stream.mux.com/playback_abc/highest.mp4");
+
+        // MP4 renditionがない場合
+        let response_without_mp4 = AssetResponse {
+            data: AssetData {
+                id: "asset_789".to_string(),
+                status: "ready".to_string(),
+                playback_ids: vec![PlaybackId {
+                    id: "playback_def".to_string(),
+                    policy: "public".to_string(),
+                }],
+                tracks: None,
+                duration: Some(60.0),
+                created_at: "1609869152".to_string(),
+                aspect_ratio: None,
+                video_quality: Some("basic".to_string()),
+                static_renditions: None,
+            },
+        };
+
+        let mp4_url = response_without_mp4.get_mp4_playback_url();
+        assert!(mp4_url.is_none());
     }
 
     #[test]
