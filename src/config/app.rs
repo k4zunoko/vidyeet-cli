@@ -36,9 +36,6 @@ pub struct UploadConfig {
     /// 対応する動画フォーマット
     pub supported_formats: &'static [&'static str],
 
-    /// 無料枠で保持できる最大動画数
-    pub max_free_tier_videos: usize,
-
     /// アップロード完了ポーリング間隔(秒)
     pub poll_interval_secs: u64,
 
@@ -69,7 +66,6 @@ impl AppConfig {
                 max_file_size: 10_737_418_240, // 10GB
                 chunk_size: 10_485_760,        // 10MB
                 supported_formats: &["mp4", "mov", "avi", "wmv", "flv", "mkv", "webm"],
-                max_free_tier_videos: 10,
                 poll_interval_secs: 2,
                 max_wait_secs: 300,
             },
