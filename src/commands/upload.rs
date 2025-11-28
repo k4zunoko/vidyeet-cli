@@ -110,7 +110,7 @@ pub async fn execute(file_path: &str) -> Result<()> {
         
         // Static renditionsの状態を表示
         if let Some(renditions) = &asset.data.static_renditions {
-            for rendition in renditions {
+            for rendition in &renditions.files {
                 if rendition.ext == "mp4" {
                     println!("          Current MP4 status: {}", rendition.status);
                 }

@@ -93,6 +93,7 @@ pub struct AssetData {
     pub status: String,
 
     /// 再生ID
+    #[serde(default)]
     pub playback_ids: Vec<PlaybackId>,
 
     /// 動画トラック情報
@@ -116,7 +117,7 @@ pub struct AssetData {
 
     /// Static Renditions（MP4など）
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub static_renditions: Option<Vec<StaticRendition>>,
+    pub static_renditions: Option<StaticRenditionsWrapper>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -154,6 +155,12 @@ pub struct StaticRendition {
 
     /// ファイル拡張子（例: "mp4", "m4a"）
     pub ext: String,
+}
+
+/// Static Renditionsラッパー（Mux APIの実際の構造）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StaticRenditionsWrapper {
+    pub files: Vec<StaticRendition>,
 }
 
 /// アセット一覧レスポンス
@@ -199,8 +206,8 @@ impl AssetResponse {
     /// playback_idと組み合わせてMP4のストリーミングURLを返します。
     pub fn get_mp4_playback_url(&self) -> Option<String> {
         let playback_id = self.data.playback_ids.first()?;
-        let rendition = self.data.static_renditions.as_ref()?
-            .iter()
+        let wrapper = self.data.static_renditions.as_ref()?;
+        let rendition = wrapper.files.iter()
             .find(|r| r.status == "ready" && r.ext == "mp4")?;
         
         Some(format!("https://stream.mux.com/{}/{}", playback_id.id, rendition.name))
@@ -278,14 +285,16 @@ mod tests {
                 created_at: "1609869152".to_string(),
                 aspect_ratio: Some("16:9".to_string()),
                 video_quality: Some("basic".to_string()),
-                static_renditions: Some(vec![StaticRendition {
-                    id: "rendition_123".to_string(),
-                    rendition_type: "standard".to_string(),
-                    status: "ready".to_string(),
-                    resolution: "highest".to_string(),
-                    name: "highest.mp4".to_string(),
-                    ext: "mp4".to_string(),
-                }]),
+                static_renditions: Some(StaticRenditionsWrapper {
+                    files: vec![StaticRendition {
+                        id: "rendition_123".to_string(),
+                        rendition_type: "standard".to_string(),
+                        status: "ready".to_string(),
+                        resolution: "highest".to_string(),
+                        name: "highest.mp4".to_string(),
+                        ext: "mp4".to_string(),
+                    }],
+                }),
             },
         };
 
