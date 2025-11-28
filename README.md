@@ -2,7 +2,6 @@
 
 **Mux Video対応動画アップロードCLIツール（Rust学習プロジェクト）**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-2024%20edition-orange.svg)](https://www.rust-lang.org)
 
 ## 概要
@@ -299,12 +298,6 @@ main.rs → cli.rs → commands/* → {domain, config, api}
 - **モジュールシステム**: Clean Architectureに基づいた明確な責務分離
 - **マクロ**: deriveマクロ（`Serialize`, `Deserialize`, `Error`）の活用
 - **型システム**: `Result`/`Option`による安全なエラー処理、コンパイル時定数
-
----
-
-## ライセンス
-
-このプロジェクトはMITライセンスの下で公開されています。
 
 ---
 
