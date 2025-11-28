@@ -8,10 +8,6 @@ use anyhow::{Context, Result, bail};
 use std::time::Duration;
 use tokio::time::sleep;
 
-const MAX_FREE_TIER_VIDEOS: usize = 10;
-const UPLOAD_POLL_INTERVAL_SECS: u64 = 2;
-const UPLOAD_MAX_WAIT_SECS: u64 = 300; // 5分
-
 /// アップロードコマンドを実行する
 ///
 /// # 引数
@@ -109,8 +105,8 @@ async fn manage_video_limit(
     let current_count = assets_list.data.len();
 
     // 10本以上ある場合は古いものから削除
-    if current_count >= MAX_FREE_TIER_VIDEOS {
-        let delete_count = current_count - MAX_FREE_TIER_VIDEOS + 1;
+    if current_count >= APP_CONFIG.upload.max_free_tier_videos {
+        let delete_count = current_count - APP_CONFIG.upload.max_free_tier_videos + 1;
         
         // 最初のN個（最も古い）を削除
         for asset in assets_list.data.iter().take(delete_count) {
@@ -206,7 +202,7 @@ async fn wait_for_upload_completion(
     upload_id: &str,
 ) -> Result<AssetResponse> {
     let auth_header = auth_manager.get_auth_header();
-    let max_iterations = UPLOAD_MAX_WAIT_SECS / UPLOAD_POLL_INTERVAL_SECS;
+    let max_iterations = APP_CONFIG.upload.max_wait_secs / APP_CONFIG.upload.poll_interval_secs;
 
     for _i in 0..max_iterations {
         // Upload情報を取得
@@ -253,10 +249,10 @@ async fn wait_for_upload_completion(
             }
             _ => {
                 // まだ処理中 - 待機
-                sleep(Duration::from_secs(UPLOAD_POLL_INTERVAL_SECS)).await;
+                sleep(Duration::from_secs(APP_CONFIG.upload.poll_interval_secs)).await;
             }
         }
     }
 
-    bail!("Upload processing timed out after {} seconds", UPLOAD_MAX_WAIT_SECS)
+    bail!("Upload processing timed out after {} seconds", APP_CONFIG.upload.max_wait_secs)
 }
