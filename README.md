@@ -142,22 +142,22 @@ vidyeet help
 
 ```
 ┌─────────────────────────────────────────┐
-│  プレゼンテーション層                      │
-│  main.rs, cli.rs, error_severity.rs    │
+│  プレゼンテーション層                     │
+│  main.rs, cli.rs, error_severity.rs     │
 │  (ユーザーI/O、終了コード決定)            │
 └────────────┬────────────────────────────┘
              ↓
 ┌─────────────────────────────────────────┐
-│  アプリケーション層                        │
+│  アプリケーション層                       │
 │  commands/ (login, logout, upload)      │
-│  (ユースケース実装、anyhowでエラー集約)   │
+│  (ユースケース実装、anyhowでエラー集約)    │
 └────────────┬────────────────────────────┘
              ↓
 ┌──────────────┬──────────────┬───────────┐
-│ ドメイン層    │ 設定層        │ インフラ層  │
+│ ドメイン層    │ 設定層        │インフラ層 │
 │ domain/      │ config/      │ api/      │
-│ (ビジネス     │ (静的/動的    │ (HTTP通信、│
-│  ルール)     │  設定)       │  認証)    │
+│ (ビジネス     │ (静的/動的    │(HTTP通信、│
+│  ルール)      │ 設定)        │ 認証)     │
 └──────────────┴──────────────┴───────────┘
 ```
 
@@ -224,7 +224,7 @@ vidyeet-cli/
 │       └── error.rs             # InfraError定義
 │
 ├── Cargo.toml
-└── README.md                    # このファイル
+└── README.md
 ```
 
 ### モジュール間の依存関係
@@ -274,7 +274,7 @@ main.rs → cli.rs → commands/* → {domain, config, api}
 
 ### Mux API仕様
 
-詳細は [docs/API_VIDEO_SPECIFICATION.md](docs/API_VIDEO_SPECIFICATION.md) を参照。
+詳細は [Mux API Reference](https://www.mux.com/docs/api-reference/video/assets) を参照。
 
 **主要エンドポイント:**
 
