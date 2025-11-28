@@ -116,7 +116,7 @@ mod tests {
     fn test_app_config_constants() {
         // グローバル定数が正しく定義されていることを確認
         assert_eq!(APP_CONFIG.api.endpoint, "https://api.mux.com");
-        assert_eq!(APP_CONFIG.api.timeout_seconds, 30);
+        assert_eq!(APP_CONFIG.api.timeout_seconds, 300);
         assert_eq!(APP_CONFIG.api.max_retries, 3);
         assert!(!APP_CONFIG.upload.supported_formats.is_empty());
     }

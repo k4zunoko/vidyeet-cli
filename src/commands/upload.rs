@@ -169,6 +169,9 @@ fn is_capacity_limit_error(error: &anyhow::Error) -> bool {
 }
 
 /// 最も古いアセットからcount件削除
+///
+/// Mux APIは新しいものから古いものの順（降順）でアセットを返すため、
+/// created_atでソートして最も古いアセットを特定します。
 async fn delete_oldest_assets(
     client: &ApiClient,
     auth_manager: &AuthManager,
@@ -183,7 +186,11 @@ async fn delete_oldest_assets(
     let response = ApiClient::check_response(response, "/video/v1/assets").await?;
     let assets_list: AssetsListResponse = ApiClient::parse_json(response).await?;
 
-    let delete_targets = assets_list.data.iter().take(count);
+    // created_atでソートして最も古いものを特定（昇順）
+    let mut assets_sorted = assets_list.data;
+    assets_sorted.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+
+    let delete_targets = assets_sorted.iter().take(count);
     let mut deleted = 0usize;
     for asset in delete_targets {
         let resp = client
