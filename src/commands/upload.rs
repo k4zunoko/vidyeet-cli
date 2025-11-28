@@ -4,6 +4,7 @@ use crate::api::types::{DirectUploadResponse, AssetResponse, AssetsListResponse}
 use crate::config::{APP_CONFIG, UserConfig};
 use crate::domain::validator;
 use anyhow::{Context, Result, bail};
+use std::io::IsTerminal;
 use std::time::Duration;
 use tokio::time::sleep;
 
@@ -24,7 +25,8 @@ const UPLOAD_MAX_WAIT_SECS: u64 = 300; // 5分
 /// ドメイン層・インフラ層のエラーを集約する。
 
 pub async fn execute(file_path: &str) -> Result<()> {
-    println!("Uploading to Mux Video...\n");
+    // 人間向けプログレス表示（stderr）
+    eprintln!("Uploading to Mux Video...\n");
 
     // ユーザー設定を読み込み
     let user_config = UserConfig::load()
@@ -39,90 +41,100 @@ pub async fn execute(file_path: &str) -> Result<()> {
     let validation =
         validator::validate_upload_file(file_path).context("File validation failed")?;
 
-    println!("File validated successfully:");
-    println!("  Path: {}", validation.path);
-    println!(
+    eprintln!("File validated successfully:");
+    eprintln!("  Path: {}", validation.path);
+    eprintln!(
         "  Size: {} bytes ({:.2} MB)",
         validation.size,
         validation.size as f64 / 1024.0 / 1024.0
     );
-    println!("  Format: {}", validation.extension);
+    eprintln!("  Format: {}", validation.extension);
 
     // 認証マネージャーとAPIクライアントを初期化
     let auth_manager = AuthManager::new(auth.token_id.clone(), auth.token_secret.clone());
     let client = ApiClient::new(APP_CONFIG.api.endpoint.to_string())
         .context("Failed to create API client")?;
 
-    // 10本制限のチェックと管理
-    println!("\nChecking video count...");
+    // 動画数制限のチェックと管理（10本以上ある場合は古いものを削除）
+    eprintln!("\nChecking video count...");
     manage_video_limit(&client, &auth_manager).await
         .context("Failed to manage video limit")?;
 
     // Direct Uploadを開始
-    println!("\nCreating Direct Upload...");
+    eprintln!("\nCreating Direct Upload...");
     let upload = create_direct_upload(&client, &auth_manager).await
         .context("Failed to create Direct Upload")?;
 
-    println!("✓ Direct Upload created: {}", upload.data.id);
+    eprintln!("✓ Direct Upload created: {}", upload.data.id);
     
     let upload_url = upload.data.url.as_ref()
         .ok_or_else(|| anyhow::anyhow!("Upload URL not found in response"))?;
-    println!("  Upload URL: {}", upload_url);
+    eprintln!("  Upload URL: {}", upload_url);
 
     // ファイルをアップロード
-    println!("\nUploading file...");
+    eprintln!("\nUploading file...");
     upload_file(&client, upload_url, file_path).await
         .context("Failed to upload file")?;
 
-    println!("✓ File uploaded successfully");
+    eprintln!("✓ File uploaded successfully");
 
-    // アップロードの完了を待機
-    println!("\nWaiting for processing...");
+    // アップロードとアセット作成の完了を待機
+    eprintln!("\nWaiting for asset creation...");
     let asset = wait_for_upload_completion(&client, &auth_manager, &upload.data.id).await
         .context("Failed to wait for upload completion")?;
 
-    // 結果を表示
-    println!("\n✓ Upload completed!");
-    println!("  Asset ID: {}", asset.data.id);
-    println!("  Status: {}", asset.data.status);
+    // 人間向け結果表示（stderr）
+    eprintln!("\n✓ Upload completed successfully!");
+    eprintln!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    eprintln!("  Asset ID: {}", asset.data.id);
     
-    // HLS再生URL（ストリーミング用）を表示
+    // HLS再生URL（すぐに利用可能）
     if let Some(playback_url) = asset.get_playback_url() {
-        println!("\n  HLS Playback URL (for streaming):");
-        println!("    {}", playback_url);
+        eprintln!("\n  🎬 HLS Streaming URL (ready now):");
+        eprintln!("     {}", playback_url);
     }
     
-    // MP4再生URL（ダウンロード/直接再生用）を表示
-    println!("\n  MP4 Playback URL (for download/direct playback):");
+    // MP4再生URL（バックグラウンド生成中または完成済み）
+    eprintln!("\n  📦 MP4 Download URL:");
     if let Some(mp4_url) = asset.get_mp4_playback_url() {
-        println!("    {}", mp4_url);
-        
-        // 自動コピー設定があればMP4 URLをクリップボードにコピー
-        if user_config.auto_copy_url {
-            println!("    (MP4 URL copied to clipboard)");
-        }
+        eprintln!("     Status: ✓ Ready");
+        eprintln!("     {}", mp4_url);
     } else {
-        // MP4はバックグラウンドで生成されるため、通常は処理中
-        println!("    Status: Processing...");
-        println!("    Note: MP4 file is being generated in the background.");
-        println!("          This usually takes a few minutes depending on video length.");
-        println!("          You can check the asset status later to get the MP4 URL.");
-        
-        // Static renditionsの状態を表示
-        if let Some(renditions) = &asset.data.static_renditions {
-            for rendition in &renditions.files {
-                if rendition.ext == "mp4" {
-                    println!("          Current MP4 status: {}", rendition.status);
-                }
-            }
+        // MP4構築URLを先に提供（生成完了後に利用可能）
+        if let Some(playback_id) = asset.data.playback_ids.first() {
+            let potential_mp4_url = format!("https://stream.mux.com/{}/highest.mp4", playback_id.id);
+            eprintln!("     Status: ⏳ Generating...");
+            eprintln!("     {}", potential_mp4_url);
+            eprintln!("\n     Note: MP4 file is being generated in the background (usually 2-5 minutes).");
+            eprintln!("           The URL above will be available once generation completes.");
+            eprintln!("           You can start streaming with HLS URL immediately!");
+        } else {
+            eprintln!("     Status: Pending (playback ID not yet available)");
         }
+    }
+    
+    eprintln!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+    // 機械可読な結果をstdoutに出力（パイプライン/リダイレクト時のみ）
+    // TTY（ターミナル）接続時はstderrの人間向け出力のみとする
+    if !std::io::stdout().is_terminal() {
+        let mp4_url = asset.data.playback_ids.first()
+            .map(|pb| format!("https://stream.mux.com/{}/highest.mp4", pb.id))
+            .unwrap_or_else(|| "N/A".to_string());
+        
+        let result = serde_json::json!({
+            "success": true,
+            "asset_id": asset.data.id,
+            "hls_url": asset.get_playback_url(),
+            "mp4_url": mp4_url,
+            "mp4_status": if asset.get_mp4_playback_url().is_some() { "ready" } else { "generating" }
+        });
+        println!("{}", serde_json::to_string(&result)?);
     }
 
     Ok(())
 }
 
-/// 10本の動画制限を管理
-///
 /// 無料枠では10本までしか動画を保存できないため、
 /// 既に10本以上ある場合は最も古いものを削除します。
 async fn manage_video_limit(
@@ -141,17 +153,17 @@ async fn manage_video_limit(
     let assets_list: AssetsListResponse = ApiClient::parse_json(response).await?;
 
     let current_count = assets_list.data.len();
-    println!("  Current video count: {}/{}", current_count, MAX_FREE_TIER_VIDEOS);
+    eprintln!("  Current video count: {}/{}", current_count, MAX_FREE_TIER_VIDEOS);
 
     // 10本以上ある場合は古いものから削除
     if current_count >= MAX_FREE_TIER_VIDEOS {
-        println!("  Limit reached. Deleting oldest videos...");
+        eprintln!("  Limit reached. Deleting oldest videos...");
         
         let delete_count = current_count - MAX_FREE_TIER_VIDEOS + 1;
         
         // 最初のN個（最も古い）を削除
         for asset in assets_list.data.iter().take(delete_count) {
-            println!("  Deleting asset: {}", asset.id);
+            eprintln!("  Deleting asset: {}", asset.id);
             
             let response = client
                 .delete(&format!("/video/v1/assets/{}", asset.id), Some(&auth_header))
@@ -161,7 +173,7 @@ async fn manage_video_limit(
             ApiClient::check_response(response, &format!("/video/v1/assets/{}", asset.id)).await?;
         }
         
-        println!("  ✓ Deleted {} old video(s)", delete_count);
+        eprintln!("  ✓ Deleted {} old video(s)", delete_count);
     }
 
     Ok(())
@@ -228,7 +240,17 @@ async fn upload_file(
     Ok(())
 }
 
-/// アップロードの完了を待機
+/// アップロードとアセット作成の完了を待機
+///
+/// Direct Uploadのステータスをポーリングし、`asset_created`状態になるまで待機します。
+/// この時点でHLS再生が可能ですが、MP4 static renditionはバックグラウンドで
+/// 生成中の場合があります。
+///
+/// # 設計意図
+/// CLIの役割は「アップロードとアセット作成の完了確認」までとし、
+/// MP4生成（数分かかる可能性）は待たずにMux側に任せます。
+/// これにより、ユーザーはすぐにHLS URLでストリーミングを開始でき、
+/// MP4は後で生成完了時にアクセスできます。
 async fn wait_for_upload_completion(
     client: &ApiClient,
     auth_manager: &AuthManager,
@@ -283,7 +305,7 @@ async fn wait_for_upload_completion(
             _ => {
                 // まだ処理中 - 待機
                 if i % 5 == 0 {
-                    println!("  Status: {} (waiting...)", upload.data.status);
+                    eprintln!("  Status: {} (waiting...)", upload.data.status);
                 }
                 sleep(Duration::from_secs(UPLOAD_POLL_INTERVAL_SECS)).await;
             }

@@ -12,9 +12,9 @@ use std::io::{self, Write};
 /// # Returns
 /// 成功時はOk(())、失敗時はエラー
 pub async fn execute() -> Result<()> {
-    println!("Logging in to Mux Video...\n");
-    println!("Please enter your Mux Access Token credentials.");
-    println!("You can find them at: https://dashboard.mux.com/settings/access-tokens\n");
+    eprintln!("Logging in to Mux Video...\n");
+    eprintln!("Please enter your Mux Access Token credentials.");
+    eprintln!("You can find them at: https://dashboard.mux.com/settings/access-tokens\n");
 
     // Token IDの取得
     print!("Access Token ID: ");
@@ -46,7 +46,7 @@ pub async fn execute() -> Result<()> {
     let auth_manager = AuthManager::new(token_id.clone(), token_secret.clone());
 
     // 認証情報をテスト
-    println!("\nVerifying credentials...");
+    eprintln!("\nVerifying credentials...");
     auth_manager
         .test_credentials()
         .await
@@ -62,8 +62,8 @@ pub async fn execute() -> Result<()> {
         .save()
         .context("Failed to save configuration file")?;
 
-    println!("\n✓ Login successful!");
-    println!("Authentication credentials have been saved.");
+    eprintln!("\n✓ Login successful!");
+    eprintln!("Authentication credentials have been saved.");
 
     Ok(())
 }

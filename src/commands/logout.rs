@@ -9,7 +9,7 @@ use anyhow::{Context, Result};
 /// # Returns
 /// 成功時はOk(())、失敗時はエラー
 pub async fn execute() -> Result<()> {
-    println!("Logging out from Mux Video...\n");
+    eprintln!("Logging out from Mux Video...\n");
 
     // UserConfigをロード
     let mut config = UserConfig::load()
@@ -17,7 +17,7 @@ pub async fn execute() -> Result<()> {
 
     // 認証情報が存在するか確認
     if !config.has_auth() {
-        println!("Already logged out.");
+        eprintln!("Already logged out.");
         return Ok(());
     }
 
@@ -29,8 +29,8 @@ pub async fn execute() -> Result<()> {
         .save()
         .context("Failed to save configuration file")?;
 
-    println!("✓ Logged out successfully.");
-    println!("Authentication credentials have been removed.");
+    eprintln!("✓ Logged out successfully.");
+    eprintln!("Authentication credentials have been removed.");
 
     Ok(())
 }

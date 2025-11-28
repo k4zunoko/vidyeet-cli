@@ -42,10 +42,10 @@ pub async fn parse_args(args: &[String]) -> Result<()> {
 
 /// コマンド使用方法を表示する
 fn print_usage() {
-    println!("Usage: vidyeet <command> [args...]");
-    println!("Available commands:");
-    println!("  login            - Login to Mux Video (credentials entered interactively)");
-    println!("  logout           - Logout from Mux Video");
-    println!("  upload <file>    - Upload a video to Mux Video");
-    println!("  help             - Display this help message");
+    eprintln!("Usage: vidyeet <command> [args...]");
+    eprintln!("Available commands:");
+    eprintln!("  login            - Login to Mux Video (credentials entered interactively)");
+    eprintln!("  logout           - Logout from Mux Video");
+    eprintln!("  upload <file>    - Upload a video to Mux Video");
+    eprintln!("  help             - Display this help message");
 }
