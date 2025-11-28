@@ -3,6 +3,19 @@
 /// Mux Video APIのレスポンスをデシリアライズするための構造体を定義します。
 use serde::{Deserialize, Serialize};
 
+/// Mux APIエラーレスポンス
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MuxErrorResponse {
+    pub error: MuxErrorDetail,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MuxErrorDetail {
+    #[serde(rename = "type")]
+    pub error_type: String,
+    pub messages: Vec<String>,
+}
+
 /// Direct Uploadレスポンス
 ///
 /// POST /video/v1/uploads のレスポンス型

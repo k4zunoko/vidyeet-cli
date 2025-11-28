@@ -1,6 +1,7 @@
 use crate::api::auth::AuthManager;
 use crate::api::client::ApiClient;
-use crate::api::types::{DirectUploadResponse, AssetResponse, AssetsListResponse};
+use crate::api::error::InfraError;
+use crate::api::types::{DirectUploadResponse, AssetResponse, AssetsListResponse, MuxErrorResponse};
 use crate::commands::result::{CommandResult, UploadResult, Mp4Status};
 use crate::config::{APP_CONFIG, UserConfig};
 use crate::domain::validator;
@@ -40,13 +41,9 @@ pub async fn execute(file_path: &str) -> Result<CommandResult> {
     let client = ApiClient::new(APP_CONFIG.api.endpoint.to_string())
         .context("Failed to create API client")?;
 
-    // 動画数制限のチェックと管理（10本以上ある場合は古いものを削除）
-    let deleted_count = manage_video_limit(&client, &auth_manager).await
-        .context("Failed to manage video limit")?;
-
-    // Direct Uploadを開始
-    let upload = create_direct_upload(&client, &auth_manager).await
-        .context("Failed to create Direct Upload")?;
+    // Direct Uploadを開始（制限エラー時に古いものを削除して一度だけ再試行）
+    let (upload, deleted_count) = create_direct_upload_with_capacity(&client, &auth_manager).await
+        .context("Failed to create Direct Upload (with capacity handling)")?;
     
     let upload_url = upload.data.url.as_ref()
         .ok_or_else(|| anyhow::anyhow!("Upload URL not found in response"))?;
@@ -82,48 +79,6 @@ pub async fn execute(file_path: &str) -> Result<CommandResult> {
     }))
 }
 
-/// 無料枠では10本までしか動画を保存できないため、
-/// 既に10本以上ある場合は最も古いものを削除します。
-/// 
-/// # Returns
-/// 削除した動画の数
-async fn manage_video_limit(
-    client: &ApiClient,
-    auth_manager: &AuthManager,
-) -> Result<usize> {
-    let auth_header = auth_manager.get_auth_header();
-    
-    // 現在のアセット一覧を取得
-    let response = client
-        .get("/video/v1/assets?limit=100", Some(&auth_header))
-        .await
-        .context("Failed to fetch assets list")?;
-
-    let response = ApiClient::check_response(response, "/video/v1/assets").await?;
-    let assets_list: AssetsListResponse = ApiClient::parse_json(response).await?;
-
-    let current_count = assets_list.data.len();
-
-    // 10本以上ある場合は古いものから削除
-    if current_count >= APP_CONFIG.upload.max_free_tier_videos {
-        let delete_count = current_count - APP_CONFIG.upload.max_free_tier_videos + 1;
-        
-        // 最初のN個（最も古い）を削除
-        for asset in assets_list.data.iter().take(delete_count) {
-            let response = client
-                .delete(&format!("/video/v1/assets/{}", asset.id), Some(&auth_header))
-                .await
-                .context(format!("Failed to delete asset {}", asset.id))?;
-            
-            ApiClient::check_response(response, &format!("/video/v1/assets/{}", asset.id)).await?;
-        }
-        
-        Ok(delete_count)
-    } else {
-        Ok(0)
-    }
-}
-
 /// Direct Uploadを作成
 async fn create_direct_upload(
     client: &ApiClient,
@@ -154,6 +109,92 @@ async fn create_direct_upload(
     let upload: DirectUploadResponse = ApiClient::parse_json(response).await?;
 
     Ok(upload)
+}
+
+/// 容量制限エラーに当たった場合、古いアセットを1つ削除して再試行する
+/// 
+/// Mux APIの制限系エラーを以下の条件で判定:
+/// - HTTP 429 (レート制限): Too Many Requests
+/// - HTTP 400/422 (容量制限): メッセージに "limit", "cannot create", "exceeding" を含む
+async fn create_direct_upload_with_capacity(
+    client: &ApiClient,
+    auth_manager: &AuthManager,
+) -> Result<(DirectUploadResponse, usize)> {
+    match create_direct_upload(client, auth_manager).await {
+        Ok(upload) => Ok((upload, 0)),
+        Err(e) => {
+            let is_limit_error = is_capacity_limit_error(&e);
+
+            if is_limit_error {
+                // 最古のアセットを1つ削除して再試行
+                let deleted = delete_oldest_assets(client, auth_manager, 1).await?;
+                let upload = create_direct_upload(client, auth_manager).await?;
+                Ok((upload, deleted))
+            } else {
+                Err(e)
+            }
+        }
+    }
+}
+
+/// エラーが容量/クォータ制限に起因するかを判定
+/// 
+/// 判定条件:
+/// - HTTP 429: レート制限超過（Too Many Requests）
+/// - HTTP 400/422 かつ error.type が "invalid_parameters" かつ
+///   メッセージに "limited to" + "assets" を含む: 容量制限エラー
+fn is_capacity_limit_error(error: &anyhow::Error) -> bool {
+    // InfraError::Apiの場合、ステータスコードとメッセージを確認
+    if let Some(infra_err) = error.downcast_ref::<InfraError>() {
+        if let InfraError::Api { status_code, message, .. } = infra_err {
+            // HTTP 429はレート制限
+            if matches!(status_code, Some(429)) {
+                return true;
+            }
+            
+            // HTTP 400/422の場合、JSONエラーレスポンスをパースして詳細に判定
+            if matches!(status_code, Some(400 | 422)) {
+                if let Ok(mux_error) = serde_json::from_str::<MuxErrorResponse>(message) {
+                    // error.typeが"invalid_parameters"でも、メッセージで容量制限を確認
+                    if mux_error.error.error_type == "invalid_parameters" {
+                        // メッセージに"limited to"と"assets"の両方が含まれる場合のみ制限エラー
+                        let messages_text = mux_error.error.messages.join(" ").to_lowercase();
+                        return messages_text.contains("limited to") && messages_text.contains("assets");
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
+/// 最も古いアセットからcount件削除
+async fn delete_oldest_assets(
+    client: &ApiClient,
+    auth_manager: &AuthManager,
+    count: usize,
+) -> Result<usize> {
+    let auth_header = auth_manager.get_auth_header();
+    let response = client
+        .get("/video/v1/assets?limit=100", Some(&auth_header))
+        .await
+        .context("Failed to fetch assets list for deletion")?;
+
+    let response = ApiClient::check_response(response, "/video/v1/assets").await?;
+    let assets_list: AssetsListResponse = ApiClient::parse_json(response).await?;
+
+    let delete_targets = assets_list.data.iter().take(count);
+    let mut deleted = 0usize;
+    for asset in delete_targets {
+        let resp = client
+            .delete(&format!("/video/v1/assets/{}", asset.id), Some(&auth_header))
+            .await
+            .context(format!("Failed to delete asset {}", asset.id))?;
+        ApiClient::check_response(resp, &format!("/video/v1/assets/{}", asset.id)).await?;
+        deleted += 1;
+    }
+
+    Ok(deleted)
 }
 
 /// ファイルをDirect Upload URLにアップロード

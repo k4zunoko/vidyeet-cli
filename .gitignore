@@ -17,4 +17,5 @@ copilot-instructions.md
 AGENT.md
 *.mp4
 *.txt
+*.ps1
 docs/
