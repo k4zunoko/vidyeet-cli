@@ -1,24 +1,24 @@
 /// ログアウトコマンド
 ///
 /// 保存されている認証情報を削除します。
+use crate::commands::result::{CommandResult, LogoutResult};
 use crate::config::user::UserConfig;
 use anyhow::{Context, Result};
 
 /// ログアウトコマンドを実行
 ///
 /// # Returns
-/// 成功時はOk(())、失敗時はエラー
-pub async fn execute() -> Result<()> {
-    eprintln!("Logging out from Mux Video...\n");
-
+/// 成功時はOk(CommandResult)、失敗時はエラー
+pub async fn execute() -> Result<CommandResult> {
     // UserConfigをロード
     let mut config = UserConfig::load()
         .context("Failed to load configuration file")?;
 
     // 認証情報が存在するか確認
-    if !config.has_auth() {
-        eprintln!("Already logged out.");
-        return Ok(());
+    let was_logged_in = config.has_auth();
+    
+    if !was_logged_in {
+        return Ok(CommandResult::Logout(LogoutResult { was_logged_in: false }));
     }
 
     // 認証情報をクリア
@@ -29,10 +29,7 @@ pub async fn execute() -> Result<()> {
         .save()
         .context("Failed to save configuration file")?;
 
-    eprintln!("✓ Logged out successfully.");
-    eprintln!("Authentication credentials have been removed.");
-
-    Ok(())
+    Ok(CommandResult::Logout(LogoutResult { was_logged_in: true }))
 }
 
 #[cfg(test)]

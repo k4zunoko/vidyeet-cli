@@ -1,10 +1,10 @@
 use crate::api::auth::AuthManager;
 use crate::api::client::ApiClient;
 use crate::api::types::{DirectUploadResponse, AssetResponse, AssetsListResponse};
+use crate::commands::result::{CommandResult, UploadResult, Mp4Status};
 use crate::config::{APP_CONFIG, UserConfig};
 use crate::domain::validator;
 use anyhow::{Context, Result, bail};
-use std::io::IsTerminal;
 use std::time::Duration;
 use tokio::time::sleep;
 
@@ -18,15 +18,13 @@ const UPLOAD_MAX_WAIT_SECS: u64 = 300; // 5分
 /// * `file_path` - アップロード対象の動画ファイルのパス
 ///
 /// # 戻り値
-/// 成功・失敗を示すResult
+/// 成功・失敗を示すResult<CommandResult>
 ///
 /// # エラー
 /// このレイヤーでは anyhow::Result を返し、
 /// ドメイン層・インフラ層のエラーを集約する。
 
-pub async fn execute(file_path: &str) -> Result<()> {
-    // 人間向けプログレス表示（stderr）
-    eprintln!("Uploading to Mux Video...\n");
+pub async fn execute(file_path: &str) -> Result<CommandResult> {
 
     // ユーザー設定を読み込み
     let user_config = UserConfig::load()
@@ -41,106 +39,62 @@ pub async fn execute(file_path: &str) -> Result<()> {
     let validation =
         validator::validate_upload_file(file_path).context("File validation failed")?;
 
-    eprintln!("File validated successfully:");
-    eprintln!("  Path: {}", validation.path);
-    eprintln!(
-        "  Size: {} bytes ({:.2} MB)",
-        validation.size,
-        validation.size as f64 / 1024.0 / 1024.0
-    );
-    eprintln!("  Format: {}", validation.extension);
-
     // 認証マネージャーとAPIクライアントを初期化
     let auth_manager = AuthManager::new(auth.token_id.clone(), auth.token_secret.clone());
     let client = ApiClient::new(APP_CONFIG.api.endpoint.to_string())
         .context("Failed to create API client")?;
 
     // 動画数制限のチェックと管理（10本以上ある場合は古いものを削除）
-    eprintln!("\nChecking video count...");
-    manage_video_limit(&client, &auth_manager).await
+    let deleted_count = manage_video_limit(&client, &auth_manager).await
         .context("Failed to manage video limit")?;
 
     // Direct Uploadを開始
-    eprintln!("\nCreating Direct Upload...");
     let upload = create_direct_upload(&client, &auth_manager).await
         .context("Failed to create Direct Upload")?;
-
-    eprintln!("✓ Direct Upload created: {}", upload.data.id);
     
     let upload_url = upload.data.url.as_ref()
         .ok_or_else(|| anyhow::anyhow!("Upload URL not found in response"))?;
-    eprintln!("  Upload URL: {}", upload_url);
 
     // ファイルをアップロード
-    eprintln!("\nUploading file...");
     upload_file(&client, upload_url, file_path).await
         .context("Failed to upload file")?;
 
-    eprintln!("✓ File uploaded successfully");
-
     // アップロードとアセット作成の完了を待機
-    eprintln!("\nWaiting for asset creation...");
     let asset = wait_for_upload_completion(&client, &auth_manager, &upload.data.id).await
         .context("Failed to wait for upload completion")?;
 
-    // 人間向け結果表示（stderr）
-    eprintln!("\n✓ Upload completed successfully!");
-    eprintln!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    eprintln!("  Asset ID: {}", asset.data.id);
-    
-    // HLS再生URL（すぐに利用可能）
-    if let Some(playback_url) = asset.get_playback_url() {
-        eprintln!("\n  🎬 HLS Streaming URL (ready now):");
-        eprintln!("     {}", playback_url);
-    }
-    
-    // MP4再生URL（バックグラウンド生成中または完成済み）
-    eprintln!("\n  📦 MP4 Download URL:");
-    if let Some(mp4_url) = asset.get_mp4_playback_url() {
-        eprintln!("     Status: ✓ Ready");
-        eprintln!("     {}", mp4_url);
+    // 結果を構造化して返す
+    let hls_url = asset.get_playback_url();
+    let mp4_url = asset.get_mp4_playback_url();
+    let playback_id = asset.data.playback_ids.first().map(|p| p.id.clone());
+    let mp4_status = if mp4_url.is_some() {
+        Mp4Status::Ready
     } else {
-        // MP4構築URLを先に提供（生成完了後に利用可能）
-        if let Some(playback_id) = asset.data.playback_ids.first() {
-            let potential_mp4_url = format!("https://stream.mux.com/{}/highest.mp4", playback_id.id);
-            eprintln!("     Status: ⏳ Generating...");
-            eprintln!("     {}", potential_mp4_url);
-            eprintln!("\n     Note: MP4 file is being generated in the background (usually 2-5 minutes).");
-            eprintln!("           The URL above will be available once generation completes.");
-            eprintln!("           You can start streaming with HLS URL immediately!");
-        } else {
-            eprintln!("     Status: Pending (playback ID not yet available)");
-        }
-    }
-    
-    eprintln!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        Mp4Status::Generating
+    };
 
-    // 機械可読な結果をstdoutに出力（パイプライン/リダイレクト時のみ）
-    // TTY（ターミナル）接続時はstderrの人間向け出力のみとする
-    if !std::io::stdout().is_terminal() {
-        let mp4_url = asset.data.playback_ids.first()
-            .map(|pb| format!("https://stream.mux.com/{}/highest.mp4", pb.id))
-            .unwrap_or_else(|| "N/A".to_string());
-        
-        let result = serde_json::json!({
-            "success": true,
-            "asset_id": asset.data.id,
-            "hls_url": asset.get_playback_url(),
-            "mp4_url": mp4_url,
-            "mp4_status": if asset.get_mp4_playback_url().is_some() { "ready" } else { "generating" }
-        });
-        println!("{}", serde_json::to_string(&result)?);
-    }
-
-    Ok(())
+    Ok(CommandResult::Upload(UploadResult {
+        asset_id: asset.data.id,
+        playback_id,
+        hls_url,
+        mp4_url,
+        mp4_status,
+        file_path: validation.path,
+        file_size: validation.size,
+        file_format: validation.extension,
+        deleted_old_videos: deleted_count,
+    }))
 }
 
 /// 無料枠では10本までしか動画を保存できないため、
 /// 既に10本以上ある場合は最も古いものを削除します。
+/// 
+/// # Returns
+/// 削除した動画の数
 async fn manage_video_limit(
     client: &ApiClient,
     auth_manager: &AuthManager,
-) -> Result<()> {
+) -> Result<usize> {
     let auth_header = auth_manager.get_auth_header();
     
     // 現在のアセット一覧を取得
@@ -153,18 +107,13 @@ async fn manage_video_limit(
     let assets_list: AssetsListResponse = ApiClient::parse_json(response).await?;
 
     let current_count = assets_list.data.len();
-    eprintln!("  Current video count: {}/{}", current_count, MAX_FREE_TIER_VIDEOS);
 
     // 10本以上ある場合は古いものから削除
     if current_count >= MAX_FREE_TIER_VIDEOS {
-        eprintln!("  Limit reached. Deleting oldest videos...");
-        
         let delete_count = current_count - MAX_FREE_TIER_VIDEOS + 1;
         
         // 最初のN個（最も古い）を削除
         for asset in assets_list.data.iter().take(delete_count) {
-            eprintln!("  Deleting asset: {}", asset.id);
-            
             let response = client
                 .delete(&format!("/video/v1/assets/{}", asset.id), Some(&auth_header))
                 .await
@@ -173,10 +122,10 @@ async fn manage_video_limit(
             ApiClient::check_response(response, &format!("/video/v1/assets/{}", asset.id)).await?;
         }
         
-        eprintln!("  ✓ Deleted {} old video(s)", delete_count);
+        Ok(delete_count)
+    } else {
+        Ok(0)
     }
-
-    Ok(())
 }
 
 /// Direct Uploadを作成
@@ -259,7 +208,7 @@ async fn wait_for_upload_completion(
     let auth_header = auth_manager.get_auth_header();
     let max_iterations = UPLOAD_MAX_WAIT_SECS / UPLOAD_POLL_INTERVAL_SECS;
 
-    for i in 0..max_iterations {
+    for _i in 0..max_iterations {
         // Upload情報を取得
         let response = client
             .get(
@@ -304,9 +253,6 @@ async fn wait_for_upload_completion(
             }
             _ => {
                 // まだ処理中 - 待機
-                if i % 5 == 0 {
-                    eprintln!("  Status: {} (waiting...)", upload.data.status);
-                }
                 sleep(Duration::from_secs(UPLOAD_POLL_INTERVAL_SECS)).await;
             }
         }
