@@ -90,6 +90,7 @@ async fn create_direct_upload(
     let request_body = serde_json::json!({
         "new_asset_settings": {
             "playback_policies": ["public"],
+            "video_quality": "premium",
             "static_renditions": [
                 { "resolution": "highest" },   // 最大解像度のMP4
             ]
