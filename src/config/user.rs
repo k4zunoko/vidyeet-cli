@@ -14,7 +14,7 @@ use std::path::PathBuf;
 const DEFAULT_TITLE: &str = "My Video";
 const DEFAULT_AUTO_COPY_URL: bool = false;
 const DEFAULT_SHOW_NOTIFICATION: bool = false;
-const DEFAULT_TIMEZONE: &str = "UTC";
+const DEFAULT_TIMEZONE_OFFSET: i32 = 0; // UTC offset in seconds
 
 /// Mux認証設定
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -43,9 +43,10 @@ pub struct UserConfig {
     #[serde(default = "default_show_notification")]
     pub show_notification: bool,
 
-    /// タイムゾーン設定（UTC, JST, Local など）
-    #[serde(default = "default_timezone")]
-    pub timezone: String,
+    /// タイムゾーンオフセット(秒単位)
+    /// 例: UTC=0, JST(UTC+9)=32400, PST(UTC-8)=-28800
+    #[serde(default = "default_timezone_offset")]
+    pub timezone_offset_seconds: i32,
 }
 
 // プライベート関数（serde用）
@@ -57,8 +58,8 @@ fn default_show_notification() -> bool {
     DEFAULT_SHOW_NOTIFICATION
 }
 
-fn default_timezone() -> String {
-    DEFAULT_TIMEZONE.to_string()
+fn default_timezone_offset() -> i32 {
+    DEFAULT_TIMEZONE_OFFSET
 }
 
 impl Default for UserConfig {
@@ -68,7 +69,7 @@ impl Default for UserConfig {
             auth: None,
             auto_copy_url: DEFAULT_AUTO_COPY_URL,
             show_notification: DEFAULT_SHOW_NOTIFICATION,
-            timezone: DEFAULT_TIMEZONE.to_string(),
+            timezone_offset_seconds: DEFAULT_TIMEZONE_OFFSET,
         }
     }
 }
@@ -178,11 +179,11 @@ default_title = "{}"
 auto_copy_url = {}
 show_notification = {}
 
-# Timezone setting
-# Supported: "UTC", "JST", "Local"
-timezone = "{}"
+# Timezone offset in seconds
+# Examples: UTC=0, JST(UTC+9)=32400, PST(UTC-8)=-28800
+timezone_offset_seconds = {}
 "#,
-            DEFAULT_TITLE, DEFAULT_AUTO_COPY_URL, DEFAULT_SHOW_NOTIFICATION, DEFAULT_TIMEZONE
+            DEFAULT_TITLE, DEFAULT_AUTO_COPY_URL, DEFAULT_SHOW_NOTIFICATION, DEFAULT_TIMEZONE_OFFSET
         )
     }
 
@@ -257,14 +258,12 @@ timezone = "{}"
             }
         }
 
-        // タイムゾーン設定の検証
-        let valid_timezones = ["UTC", "JST", "Local"];
-        if !valid_timezones.contains(&self.timezone.as_str()) {
+        // タイムゾーンオフセットの検証(±18時間 = ±64800秒の範囲)
+        if self.timezone_offset_seconds < -64800 || self.timezone_offset_seconds > 64800 {
             return Err(ConfigError::ValidationError {
                 message: format!(
-                    "Invalid timezone '{}'. Supported values: {}",
-                    self.timezone,
-                    valid_timezones.join(", ")
+                    "Invalid timezone offset '{}' seconds. Must be between -64800 and 64800 (±18 hours)",
+                    self.timezone_offset_seconds
                 ),
             });
         }
@@ -316,7 +315,7 @@ mod tests {
             auth: None,
             auto_copy_url: false,
             show_notification: true,
-            timezone: DEFAULT_TIMEZONE.to_string(),
+            timezone_offset_seconds: 0,
         };
 
         assert!(!config.has_auth());
@@ -381,7 +380,7 @@ mod tests {
             auth: None,
             auto_copy_url: true,
             show_notification: false,
-            timezone: "JST".to_string(),
+            timezone_offset_seconds: 32400, // JST = UTC+9
         };
         test_config.set_auth("test_id_xyz".to_string(), "test_secret_xyz".to_string());
 
@@ -435,7 +434,7 @@ mod tests {
                 }),
                 auto_copy_url: false,
                 show_notification: true,
-                timezone: DEFAULT_TIMEZONE.to_string(),
+                timezone_offset_seconds: 0,
             };
 
             test_config.save().expect("Failed to save config");
@@ -483,7 +482,7 @@ mod tests {
             }),
             auto_copy_url: true,
             show_notification: false,
-            timezone: "UTC".to_string(),
+            timezone_offset_seconds: 0, // UTC
         };
 
         // TOML形式にシリアライズ
@@ -506,7 +505,7 @@ mod tests {
             auth: None,
             auto_copy_url: false,
             show_notification: true,
-            timezone: DEFAULT_TIMEZONE.to_string(),
+            timezone_offset_seconds: 0,
         };
 
         let result = config.validate();

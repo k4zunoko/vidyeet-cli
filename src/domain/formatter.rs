@@ -1,21 +1,21 @@
 /// ドメインサービス: タイムスタンプフォーマット
 ///
 /// Unixタイムスタンプを人間向けの時刻文字列に変換する。
-/// ドメイン層の責務として、ユーザー設定に基づいたビジネスルール（タイムゾーン変換）を適用する。
+/// ドメイン層の責務として、ユーザー設定に基づいたビジネスルール(タイムゾーン変換)を適用する。
 use crate::config::UserConfig;
-use chrono::{DateTime, Local, TimeZone, Utc};
+use chrono::{DateTime, FixedOffset, TimeZone, Utc};
 
 /// Unixタイムスタンプをユーザー設定に応じてフォーマット
 ///
 /// # 引数
 /// * `timestamp_str` - Unixタイムスタンプ（文字列、秒単位）
-/// * `user_config` - ユーザー設定（タイムゾーン設定を含む）
+/// * `user_config` - ユーザー設定（タイムゾーンオフセットを含む）
 ///
 /// # 戻り値
 /// フォーマット済みの時刻文字列
-/// - UTC: "2024-12-01 14:30:45 UTC"
-/// - JST: "2024-12-01 23:30:45 JST"
-/// - Local: "2024-12-01 23:30:45 +09:00" (システムのローカルタイムゾーン)
+/// - offset=0: "2024-12-01 14:30:45 +00:00" (UTC)
+/// - offset=32400: "2024-12-01 23:30:45 +09:00" (JST)
+/// - offset=-28800: "2024-12-01 06:30:45 -08:00" (PST)
 ///
 /// パースエラーの場合は、元の文字列をそのまま返します。
 pub fn format_timestamp(timestamp_str: &str, user_config: &UserConfig) -> String {
@@ -28,35 +28,23 @@ pub fn format_timestamp(timestamp_str: &str, user_config: &UserConfig) -> String
     // UTC DateTimeに変換
     let datetime_utc = match Utc.timestamp_opt(timestamp, 0) {
         chrono::LocalResult::Single(dt) => dt,
-        _ => return timestamp_str.to_string(), // 無効なタイムスタンプの場合
+        _ => return timestamp_str.to_string(), // 無効なUnixタイムスタンプの場合
     };
 
-    // ユーザー設定のタイムゾーンに応じてフォーマット
-    match user_config.timezone.as_str() {
-        "UTC" => format_utc(datetime_utc),
-        "JST" => format_jst(datetime_utc),
-        "Local" => format_local(datetime_utc),
-        _ => format_utc(datetime_utc), // デフォルトはUTC
-    }
+    // ユーザー設定のオフセットを適用
+    format_with_offset(datetime_utc, user_config.timezone_offset_seconds)
 }
 
-/// UTC形式でフォーマット
-fn format_utc(datetime: DateTime<Utc>) -> String {
-    datetime.format("%Y-%m-%d %H:%M:%S UTC").to_string()
-}
-
-/// JST (UTC+9) 形式でフォーマット
-fn format_jst(datetime: DateTime<Utc>) -> String {
-    // JSTはUTC+9時間
-    let jst_offset = chrono::FixedOffset::east_opt(9 * 3600).unwrap();
-    let datetime_jst = datetime.with_timezone(&jst_offset);
-    datetime_jst.format("%Y-%m-%d %H:%M:%S JST").to_string()
-}
-
-/// ローカルタイムゾーン形式でフォーマット
-fn format_local(datetime: DateTime<Utc>) -> String {
-    let datetime_local: DateTime<Local> = datetime.with_timezone(&Local);
-    datetime_local.format("%Y-%m-%d %H:%M:%S %z").to_string()
+/// 指定されたオフセット(秒)でフォーマット
+fn format_with_offset(datetime: DateTime<Utc>, offset_seconds: i32) -> String {
+    // オフセットを適用
+    let offset = match FixedOffset::east_opt(offset_seconds) {
+        Some(o) => o,
+        std::option::Option::None => return datetime.format("%Y-%m-%d %H:%M:%S +00:00").to_string(), // 無効なオフセットの場合はUTCにフォールバック
+    };
+    
+    let datetime_with_offset = datetime.with_timezone(&offset);
+    datetime_with_offset.format("%Y-%m-%d %H:%M:%S %:z").to_string()
 }
 
 #[cfg(test)]
@@ -64,67 +52,66 @@ mod tests {
     use super::*;
     use crate::config::UserConfig;
 
-    fn create_test_config(timezone: &str) -> UserConfig {
+    fn create_test_config(timezone_offset_seconds: i32) -> UserConfig {
         let mut config = UserConfig::default();
-        config.timezone = timezone.to_string();
+        config.timezone_offset_seconds = timezone_offset_seconds;
         config
     }
 
     #[test]
     fn test_format_timestamp_utc() {
-        let config = create_test_config("UTC");
+        let config = create_test_config(0); // UTC = offset 0
         // 1764434950 = 2025-11-29 16:49:10 UTC
         let result = format_timestamp("1764434950", &config);
         assert!(result.contains("2025-11-29"));
-        assert!(result.contains("UTC"));
+        assert!(result.contains("+00:00")); // UTC offset format
     }
 
     #[test]
     fn test_format_timestamp_jst() {
-        let config = create_test_config("JST");
+        let config = create_test_config(32400); // JST = UTC+9 = 32400 seconds
         // 1764434950 = 2025-11-29 16:49:10 UTC = 2025-11-30 01:49:10 JST
         let result = format_timestamp("1764434950", &config);
         assert!(result.contains("2025-11-30"));
-        assert!(result.contains("JST"));
+        assert!(result.contains("+09:00")); // JST offset format
     }
 
     #[test]
-    fn test_format_timestamp_local() {
-        let config = create_test_config("Local");
+    fn test_format_timestamp_pst() {
+        let config = create_test_config(-28800); // PST = UTC-8 = -28800 seconds
+        // 1764434950 = 2025-11-29 16:49:10 UTC = 2025-11-29 08:49:10 PST
         let result = format_timestamp("1764434950", &config);
-        assert!(result.contains("2025-11"));
-        // ローカルタイムゾーンオフセットが含まれる（例: +09:00）
-        assert!(result.contains("+") || result.contains("-"));
+        assert!(result.contains("2025-11-29"));
+        assert!(result.contains("-08:00")); // PST offset format
     }
 
     #[test]
     fn test_format_timestamp_invalid_timestamp() {
-        let config = create_test_config("UTC");
-        // 無効なタイムスタンプは元の文字列を返す
+        let config = create_test_config(0);
+        // 無効なUnixタイムスタンプは元の文字列を返す
         let result = format_timestamp("invalid", &config);
         assert_eq!(result, "invalid");
     }
 
     #[test]
-    fn test_format_timestamp_unsupported_timezone() {
-        let config = create_test_config("INVALID");
-        // サポートされていないタイムゾーンはUTCとして扱う
-        let result = format_timestamp("1733066445", &config);
-        assert!(result.contains("UTC"));
+    fn test_format_with_offset_utc() {
+        let dt = Utc.timestamp_opt(1764434950, 0).unwrap();
+        let result = format_with_offset(dt, 0);
+        assert_eq!(result, "2025-11-29 16:49:10 +00:00");
     }
 
     #[test]
-    fn test_format_utc() {
+    fn test_format_with_offset_jst() {
         let dt = Utc.timestamp_opt(1764434950, 0).unwrap();
-        let result = format_utc(dt);
-        assert_eq!(result, "2025-11-29 16:49:10 UTC");
-    }
-
-    #[test]
-    fn test_format_jst() {
-        let dt = Utc.timestamp_opt(1764434950, 0).unwrap();
-        let result = format_jst(dt);
+        let result = format_with_offset(dt, 32400); // JST = UTC+9
         // UTC 16:49:10 → JST 01:49:10 (+9時間、翌日)
-        assert_eq!(result, "2025-11-30 01:49:10 JST");
+        assert_eq!(result, "2025-11-30 01:49:10 +09:00");
+    }
+
+    #[test]
+    fn test_format_with_offset_negative() {
+        let dt = Utc.timestamp_opt(1764434950, 0).unwrap();
+        let result = format_with_offset(dt, -18000); // EST = UTC-5
+        assert_eq!(result, "2025-11-29 11:49:10 -05:00");
     }
 }
