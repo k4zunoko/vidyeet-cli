@@ -202,11 +202,14 @@ vidyeet-cli/
 │   │   ├── logout.rs            # ログアウトコマンド
 │   │   ├── upload.rs            # アップロードコマンド
 │   │   ├── help.rs              # ヘルプコマンド
+│   │   ├── list.rs              # アセット一覧コマンド
+│   │   ├── status.rs            # ステータスコマンド
 │   │   └── result.rs            # コマンド結果型
 │   │
 │   ├── domain/                  # ドメイン層
 │   │   ├── mod.rs
 │   │   ├── validator.rs         # ファイルバリデーション
+│   │   ├── formatter.rs         # タイムスタンプフォーマット
 │   │   └── error.rs             # DomainError定義
 │   │
 │   ├── config/                  # 設定層
@@ -251,6 +254,7 @@ main.rs → cli.rs → commands/* → {domain, config, api}
 | [reqwest](https://docs.rs/reqwest/) | 0.11 | HTTP通信（非同期） |
 | [tokio](https://docs.rs/tokio/) | 1.0 | 非同期ランタイム |
 | [base64](https://docs.rs/base64/) | 0.21 | HTTP Basic認証ヘッダー生成 |
+| [chrono](https://docs.rs/chrono/) | 0.4 | 日時処理とタイムゾーン変換 |
 
 ### アップロード処理フロー
 
@@ -284,20 +288,6 @@ main.rs → cli.rs → commands/* → {domain, config, api}
 - `DELETE /video/v1/assets/{ASSET_ID}` - Asset削除
 
 **認証:** HTTP Basic認証（Access Token ID/Secret）
-
----
-
-## 使用している主なRust機能
-
-このプロジェクトで使用しているRustの機能：
-
-- **所有権とライフタイム**: 参照と借用を活用した安全なメモリ管理
-- **エラーハンドリング**: `thiserror`と`anyhow`を組み合わせた階層的なエラー処理
-- **非同期プログラミング**: `tokio`ランタイムによるasync/await
-- **トレイトシステム**: 共通インターフェース（`HasSeverity`）による抽象化
-- **モジュールシステム**: Clean Architectureに基づいた明確な責務分離
-- **マクロ**: deriveマクロ（`Serialize`, `Deserialize`, `Error`）の活用
-- **型システム**: `Result`/`Option`による安全なエラー処理、コンパイル時定数
 
 ---
 
