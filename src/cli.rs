@@ -13,14 +13,23 @@ pub async fn parse_args(args: &[String]) -> Result<()> {
 
     let result = match command.as_str() {
         "login" => {
-            // ユーザー向け案内メッセージを表示
-            eprintln!("Logging in to Mux Video...");
-            eprintln!();
-            eprintln!("Please enter your Mux Access Token credentials.");
-            eprintln!("You can find them at: https://dashboard.mux.com/settings/access-tokens");
-            eprintln!();
+            // --stdin フラグをチェック
+            let use_stdin = args.get(2).map(|s| s.as_str()) == Some("--stdin");
             
-            commands::login::execute()
+            let input_method = if use_stdin {
+                commands::login::InputMethod::Stdin
+            } else {
+                // 対話的入力の場合のみ案内メッセージを表示
+                eprintln!("Logging in to Mux Video...");
+                eprintln!();
+                eprintln!("Please enter your Mux Access Token credentials.");
+                eprintln!("You can find them at: https://dashboard.mux.com/settings/access-tokens");
+                eprintln!();
+                
+                commands::login::InputMethod::Interactive
+            };
+            
+            commands::login::execute(input_method)
                 .await
                 .context("Login command failed")?
         }
