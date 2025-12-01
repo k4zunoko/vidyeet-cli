@@ -240,6 +240,9 @@ fn output_human_readable(result: &CommandResult) -> Result<()> {
                 eprintln!("No videos found.");
                 eprintln!("Upload your first video with 'vidyeet upload <file>'");
             } else {
+                // ユーザー設定を読み込んでタイムゾーン設定を取得
+                let user_config = crate::config::user::UserConfig::load().ok();
+                
                 eprintln!("✓ Found {} video(s):", r.total_count);
                 eprintln!();
                 for (idx, video) in r.videos.iter().enumerate() {
@@ -265,7 +268,13 @@ fn output_human_readable(result: &CommandResult) -> Result<()> {
                         eprintln!("  📦 MP4 URL: {}", mp4_url);
                     }
                     
-                    eprintln!("  Created: {}", video.created_at);
+                    // 作成日時をフォーマット（ユーザー設定のタイムゾーンを使用）
+                    let formatted_time = if let Some(config) = &user_config {
+                        crate::domain::formatter::format_timestamp(&video.created_at, config)
+                    } else {
+                        video.created_at.clone()
+                    };
+                    eprintln!("  Created: {}", formatted_time);
                     eprintln!();
                 }
                 eprintln!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");

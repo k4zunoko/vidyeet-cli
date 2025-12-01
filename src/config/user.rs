@@ -14,6 +14,7 @@ use std::path::PathBuf;
 const DEFAULT_TITLE: &str = "My Video";
 const DEFAULT_AUTO_COPY_URL: bool = false;
 const DEFAULT_SHOW_NOTIFICATION: bool = false;
+const DEFAULT_TIMEZONE: &str = "UTC";
 
 /// Mux認証設定
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,6 +42,10 @@ pub struct UserConfig {
     /// アップロード完了時に通知を表示するか
     #[serde(default = "default_show_notification")]
     pub show_notification: bool,
+
+    /// タイムゾーン設定（UTC, JST, Local など）
+    #[serde(default = "default_timezone")]
+    pub timezone: String,
 }
 
 // プライベート関数（serde用）
@@ -52,6 +57,10 @@ fn default_show_notification() -> bool {
     DEFAULT_SHOW_NOTIFICATION
 }
 
+fn default_timezone() -> String {
+    DEFAULT_TIMEZONE.to_string()
+}
+
 impl Default for UserConfig {
     fn default() -> Self {
         Self {
@@ -59,6 +68,7 @@ impl Default for UserConfig {
             auth: None,
             auto_copy_url: DEFAULT_AUTO_COPY_URL,
             show_notification: DEFAULT_SHOW_NOTIFICATION,
+            timezone: DEFAULT_TIMEZONE.to_string(),
         }
     }
 }
@@ -163,12 +173,16 @@ impl UserConfig {
     fn default_toml_content() -> String {
         format!(
             r#"# Mux Video CLI - User Configuration
-# 認証情報は 'vidyeet login' で設定されます
+# Authentication credentials are set with 'vidyeet login'
 default_title = "{}"
 auto_copy_url = {}
 show_notification = {}
+
+# Timezone setting
+# Supported: "UTC", "JST", "Local"
+timezone = "{}"
 "#,
-            DEFAULT_TITLE, DEFAULT_AUTO_COPY_URL, DEFAULT_SHOW_NOTIFICATION
+            DEFAULT_TITLE, DEFAULT_AUTO_COPY_URL, DEFAULT_SHOW_NOTIFICATION, DEFAULT_TIMEZONE
         )
     }
 
@@ -242,6 +256,19 @@ show_notification = {}
                 });
             }
         }
+
+        // タイムゾーン設定の検証
+        let valid_timezones = ["UTC", "JST", "Local"];
+        if !valid_timezones.contains(&self.timezone.as_str()) {
+            return Err(ConfigError::ValidationError {
+                message: format!(
+                    "Invalid timezone '{}'. Supported values: {}",
+                    self.timezone,
+                    valid_timezones.join(", ")
+                ),
+            });
+        }
+
         Ok(())
     }
 
@@ -289,6 +316,7 @@ mod tests {
             auth: None,
             auto_copy_url: false,
             show_notification: true,
+            timezone: DEFAULT_TIMEZONE.to_string(),
         };
 
         assert!(!config.has_auth());
@@ -353,6 +381,7 @@ mod tests {
             auth: None,
             auto_copy_url: true,
             show_notification: false,
+            timezone: "JST".to_string(),
         };
         test_config.set_auth("test_id_xyz".to_string(), "test_secret_xyz".to_string());
 
@@ -406,6 +435,7 @@ mod tests {
                 }),
                 auto_copy_url: false,
                 show_notification: true,
+                timezone: DEFAULT_TIMEZONE.to_string(),
             };
 
             test_config.save().expect("Failed to save config");
@@ -453,6 +483,7 @@ mod tests {
             }),
             auto_copy_url: true,
             show_notification: false,
+            timezone: "UTC".to_string(),
         };
 
         // TOML形式にシリアライズ
@@ -475,6 +506,7 @@ mod tests {
             auth: None,
             auto_copy_url: false,
             show_notification: true,
+            timezone: DEFAULT_TIMEZONE.to_string(),
         };
 
         let result = config.validate();

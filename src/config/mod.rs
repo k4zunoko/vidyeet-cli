@@ -67,6 +67,7 @@ mod tests {
             auth: None,
             auto_copy_url: true,
             show_notification: false,
+            timezone: "UTC".to_string(),
         };
         config.set_auth("test_id".to_string(), "test_secret".to_string());
 
@@ -99,6 +100,7 @@ mod tests {
             auth: None,
             auto_copy_url: true,
             show_notification: true,
+            timezone: "UTC".to_string(),
         };
         user_config.set_auth("test_id".to_string(), "test_secret".to_string());
 
