@@ -13,20 +13,17 @@ use std::io::{self, Write};
 /// # Returns
 /// 成功時はOk(CommandResult)、失敗時はエラー
 pub async fn execute() -> Result<CommandResult> {
-    eprintln!("Logging in to Mux Video...\n");
-    
     // 既存の設定を確認
     let mut config = UserConfig::load()
         .context("Failed to load configuration file")?;
     
     let was_logged_in = config.has_auth();
-    
+
+    // 既存ログイン時の警告（対話的フローの一部）
     if was_logged_in {
-        eprintln!("Note: You are already logged in. Entering new credentials will overwrite the existing ones.\n");
+        eprintln!("Note: You are already logged in. Entering new credentials will overwrite the existing ones.");
+        eprintln!();
     }
-    
-    eprintln!("Please enter your Mux Access Token credentials.");
-    eprintln!("You can find them at: https://dashboard.mux.com/settings/access-tokens\n");
 
     // Token IDの取得
     eprint!("Access Token ID: ");
@@ -58,7 +55,6 @@ pub async fn execute() -> Result<CommandResult> {
     let auth_manager = AuthManager::new(token_id.clone(), token_secret.clone());
 
     // 認証情報をテスト
-    eprintln!("\nVerifying credentials...");
     auth_manager
         .test_credentials()
         .await

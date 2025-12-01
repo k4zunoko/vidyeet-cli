@@ -13,6 +13,13 @@ pub async fn parse_args(args: &[String]) -> Result<()> {
 
     let result = match command.as_str() {
         "login" => {
+            // ユーザー向け案内メッセージを表示
+            eprintln!("Logging in to Mux Video...");
+            eprintln!();
+            eprintln!("Please enter your Mux Access Token credentials.");
+            eprintln!("You can find them at: https://dashboard.mux.com/settings/access-tokens");
+            eprintln!();
+            
             commands::login::execute()
                 .await
                 .context("Login command failed")?
@@ -23,6 +30,9 @@ pub async fn parse_args(args: &[String]) -> Result<()> {
                 .context("Logout command failed")?
         }
         "status" => {
+            eprintln!("Checking authentication status...");
+            eprintln!();
+            
             commands::status::execute()
                 .await
                 .context("Status command failed")?
@@ -84,11 +94,12 @@ fn output_result(result: &CommandResult) -> Result<()> {
 fn output_human_readable(result: &CommandResult) -> Result<()> {
     match result {
         CommandResult::Login(r) => {
+            eprintln!();
             if r.was_logged_in {
-                eprintln!("\n✓ Login credentials updated!");
+                eprintln!("✓ Login credentials updated!");
                 eprintln!("New authentication credentials have been saved.");
             } else {
-                eprintln!("\n✓ Login successful!");
+                eprintln!("✓ Login successful!");
                 eprintln!("Authentication credentials have been saved.");
             }
         }
@@ -101,14 +112,26 @@ fn output_human_readable(result: &CommandResult) -> Result<()> {
             }
         }
         CommandResult::Status(r) => {
+            eprintln!();
             if r.is_authenticated {
                 eprintln!("✓ Authenticated");
                 if let Some(token_id) = &r.token_id {
                     eprintln!("  Token ID: {}", token_id);
                 }
-                eprintln!("\n  Your credentials are valid and working.");
+                eprintln!();
+                eprintln!("  Your credentials are valid and working.");
+            } else if let Some(token_id) = &r.token_id {
+                // 認証情報はあるが検証失敗
+                eprintln!("✗ Authentication failed");
+                eprintln!("  Token ID: {}", token_id);
+                eprintln!();
+                eprintln!("  Your credentials may be invalid or expired.");
+                eprintln!("  Please run 'vidyeet login' to update your credentials.");
             } else {
-                // エラー詳細は既にstatus.rsのexecute内で出力済み
+                // 認証情報が存在しない
+                eprintln!("✗ Not logged in");
+                eprintln!("  No authentication credentials found.");
+                eprintln!("  Please run 'vidyeet login' to authenticate.");
             }
         }
         CommandResult::Upload(r) => {
