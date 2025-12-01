@@ -1,6 +1,6 @@
 use crate::commands::{self, CommandResult};
 use anyhow::{Context, Result, bail};
-use std::io::IsTerminal;
+use std::io::{self, IsTerminal, Write};
 
 /// CLI引数を解析し、適切なコマンドにディスパッチする
 pub async fn parse_args(args: &[String]) -> Result<()> {
@@ -16,20 +16,37 @@ pub async fn parse_args(args: &[String]) -> Result<()> {
             // --stdin フラグをチェック
             let use_stdin = args.get(2).map(|s| s.as_str()) == Some("--stdin");
             
-            let input_method = if use_stdin {
-                commands::login::InputMethod::Stdin
+            let credentials = if use_stdin {
+                // stdin からパイプで認証情報を取得
+                read_credentials_from_stdin()
+                    .context("Failed to read credentials from stdin")?
             } else {
-                // 対話的入力の場合のみ案内メッセージを表示
+                // 対話的入力の場合
+                if !io::stdin().is_terminal() {
+                    bail!("Interactive input requires a TTY. Use '--stdin' flag for non-interactive input.");
+                }
+                
+                // 案内メッセージを表示（プレゼンテーション層の責務）
                 eprintln!("Logging in to Mux Video...");
                 eprintln!();
                 eprintln!("Please enter your Mux Access Token credentials.");
                 eprintln!("You can find them at: https://dashboard.mux.com/settings/access-tokens");
                 eprintln!();
                 
-                commands::login::InputMethod::Interactive
+                // 既存ログイン時の警告チェック
+                if let Ok(config) = crate::config::user::UserConfig::load() {
+                    if config.has_auth() {
+                        eprintln!("Note: You are already logged in. Entering new credentials will overwrite the existing ones.");
+                        eprintln!();
+                    }
+                }
+                
+                // 対話的に認証情報を取得
+                read_credentials_interactive()
+                    .context("Failed to read credentials interactively")?
             };
             
-            commands::login::execute(input_method)
+            commands::login::execute(credentials)
                 .await
                 .context("Login command failed")?
         }
@@ -79,6 +96,74 @@ fn print_usage() {
     eprintln!("  status           - Check authentication status");
     eprintln!("  upload <file>    - Upload a video to Mux Video");
     eprintln!("  help             - Display this help message");
+}
+
+/// 対話的に認証情報を取得（TTY必須）
+/// 
+/// プレゼンテーション層の責務として、ユーザー入力を取得し検証する
+fn read_credentials_interactive() -> Result<commands::login::LoginCredentials> {
+    // Token IDの取得
+    eprint!("Access Token ID: ");
+    io::stdout().flush()?;
+    let mut token_id = String::new();
+    io::stdin()
+        .read_line(&mut token_id)
+        .context("Failed to read Token ID from input")?;
+    let token_id = token_id.trim().to_string();
+
+    if token_id.is_empty() {
+        bail!("Token ID cannot be empty. Please provide a valid Token ID.");
+    }
+
+    // Token Secret の取得
+    eprint!("Access Token Secret: ");
+    io::stdout().flush()?;
+    let mut token_secret = String::new();
+    io::stdin()
+        .read_line(&mut token_secret)
+        .context("Failed to read Token Secret from input")?;
+    let token_secret = token_secret.trim().to_string();
+
+    if token_secret.is_empty() {
+        bail!("Token Secret cannot be empty. Please provide a valid Token Secret.");
+    }
+
+    Ok(commands::login::LoginCredentials {
+        token_id,
+        token_secret,
+    })
+}
+
+/// stdin からパイプで認証情報を取得（2行形式）
+/// 
+/// 形式:
+///   1行目: Token ID
+///   2行目: Token Secret
+fn read_credentials_from_stdin() -> Result<commands::login::LoginCredentials> {
+    let mut token_id = String::new();
+    io::stdin()
+        .read_line(&mut token_id)
+        .context("Failed to read Token ID from stdin")?;
+    let token_id = token_id.trim().to_string();
+
+    if token_id.is_empty() {
+        bail!("Token ID cannot be empty.");
+    }
+
+    let mut token_secret = String::new();
+    io::stdin()
+        .read_line(&mut token_secret)
+        .context("Failed to read Token Secret from stdin")?;
+    let token_secret = token_secret.trim().to_string();
+
+    if token_secret.is_empty() {
+        bail!("Token Secret cannot be empty.");
+    }
+
+    Ok(commands::login::LoginCredentials {
+        token_id,
+        token_secret,
+    })
 }
 
 /// コマンド結果を適切な形式で出力する
