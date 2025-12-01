@@ -12,6 +12,7 @@ pub enum CommandResult {
     Logout(LogoutResult),
     Upload(UploadResult),
     Status(StatusResult),
+    List(ListResult),
     Help,
 }
 
@@ -71,6 +72,36 @@ pub enum Mp4Status {
     Generating,
 }
 
+/// リストコマンドの結果
+#[derive(Debug, Clone, Serialize)]
+pub struct ListResult {
+    /// 動画リスト
+    pub videos: Vec<VideoInfo>,
+    /// 合計数
+    pub total_count: usize,
+}
+
+/// 動画情報
+#[derive(Debug, Clone, Serialize)]
+pub struct VideoInfo {
+    /// アセットID
+    pub asset_id: String,
+    /// ステータス (preparing, ready, errored)
+    pub status: String,
+    /// 再生ID
+    pub playback_id: Option<String>,
+    /// HLS再生URL
+    pub hls_url: Option<String>,
+    /// MP4再生URL
+    pub mp4_url: Option<String>,
+    /// 動画時間（秒）
+    pub duration: Option<f64>,
+    /// 作成日時（Unix timestamp）
+    pub created_at: String,
+    /// アスペクト比
+    pub aspect_ratio: Option<String>,
+}
+
 impl CommandResult {
     /// 成功メッセージを取得（人間向け出力用）
     pub fn success_message(&self) -> String {
@@ -96,6 +127,9 @@ impl CommandResult {
                 } else {
                     "Not authenticated".to_string()
                 }
+            }
+            CommandResult::List(r) => {
+                format!("Found {} video(s)", r.total_count)
             }
             CommandResult::Help => "".to_string(),
         }

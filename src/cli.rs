@@ -63,6 +63,11 @@ pub async fn parse_args(args: &[String]) -> Result<()> {
                 .await
                 .context("Status command failed")?
         }
+        "list" => {
+            commands::list::execute()
+                .await
+                .context("List command failed")?
+        }
         "upload" => {
             let file_path = args
                 .get(2)
@@ -94,6 +99,7 @@ fn print_usage() {
     eprintln!("  login            - Login to Mux Video (credentials entered interactively)");
     eprintln!("  logout           - Logout from Mux Video");
     eprintln!("  status           - Check authentication status");
+    eprintln!("  list             - List all uploaded videos");
     eprintln!("  upload <file>    - Upload a video to Mux Video");
     eprintln!("  help             - Display this help message");
 }
@@ -228,6 +234,43 @@ fn output_human_readable(result: &CommandResult) -> Result<()> {
                 eprintln!("  Please run 'vidyeet login' to authenticate.");
             }
         }
+        CommandResult::List(r) => {
+            eprintln!();
+            if r.total_count == 0 {
+                eprintln!("No videos found.");
+                eprintln!("Upload your first video with 'vidyeet upload <file>'");
+            } else {
+                eprintln!("✓ Found {} video(s):", r.total_count);
+                eprintln!();
+                for (idx, video) in r.videos.iter().enumerate() {
+                    eprintln!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+                    eprintln!("  Video #{}", idx + 1);
+                    eprintln!("  Asset ID: {}", video.asset_id);
+                    eprintln!("  Status: {}", video.status);
+                    
+                    if let Some(duration) = video.duration {
+                        let minutes = (duration / 60.0) as u64;
+                        let seconds = (duration % 60.0) as u64;
+                        eprintln!("  Duration: {}:{:02}", minutes, seconds);
+                    }
+                    
+                    if let Some(aspect_ratio) = &video.aspect_ratio {
+                        eprintln!("  Aspect Ratio: {}", aspect_ratio);
+                    }
+                    
+                    if let Some(hls_url) = &video.hls_url {
+                        eprintln!("  🎬 HLS URL: {}", hls_url);
+                    }
+                    if let Some(mp4_url) = &video.mp4_url {
+                        eprintln!("  📦 MP4 URL: {}", mp4_url);
+                    }
+                    
+                    eprintln!("  Created: {}", video.created_at);
+                    eprintln!();
+                }
+                eprintln!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            }
+        }
         CommandResult::Upload(r) => {
             eprintln!("\n✓ Upload completed successfully!");
             eprintln!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
@@ -299,6 +342,14 @@ fn output_machine_readable(result: &CommandResult) -> Result<()> {
                 "command": "status",
                 "is_authenticated": r.is_authenticated,
                 "token_id": r.token_id
+            })
+        }
+        CommandResult::List(r) => {
+            serde_json::json!({
+                "success": true,
+                "command": "list",
+                "videos": r.videos,
+                "total_count": r.total_count
             })
         }
         CommandResult::Upload(r) => {

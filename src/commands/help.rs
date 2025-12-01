@@ -10,6 +10,7 @@ pub fn execute() {
     eprintln!("  login          - Login to Mux Video");
     eprintln!("  logout         - Logout from Mux Video");
     eprintln!("  status         - Check authentication status");
+    eprintln!("  list           - List all uploaded videos");
     eprintln!("  upload <file>  - Upload a video file");
     eprintln!("  help           - Display this help message");
 }
