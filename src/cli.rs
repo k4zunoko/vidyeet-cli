@@ -22,6 +22,11 @@ pub async fn parse_args(args: &[String]) -> Result<()> {
                 .await
                 .context("Logout command failed")?
         }
+        "status" => {
+            commands::status::execute()
+                .await
+                .context("Status command failed")?
+        }
         "upload" => {
             let file_path = args
                 .get(2)
@@ -52,6 +57,7 @@ fn print_usage() {
     eprintln!("Available commands:");
     eprintln!("  login            - Login to Mux Video (credentials entered interactively)");
     eprintln!("  logout           - Logout from Mux Video");
+    eprintln!("  status           - Check authentication status");
     eprintln!("  upload <file>    - Upload a video to Mux Video");
     eprintln!("  help             - Display this help message");
 }
@@ -92,6 +98,17 @@ fn output_human_readable(result: &CommandResult) -> Result<()> {
                 eprintln!("Authentication credentials have been removed.");
             } else {
                 eprintln!("Already logged out.");
+            }
+        }
+        CommandResult::Status(r) => {
+            if r.is_authenticated {
+                eprintln!("✓ Authenticated");
+                if let Some(token_id) = &r.token_id {
+                    eprintln!("  Token ID: {}", token_id);
+                }
+                eprintln!("\n  Your credentials are valid and working.");
+            } else {
+                // エラー詳細は既にstatus.rsのexecute内で出力済み
             }
         }
         CommandResult::Upload(r) => {
@@ -157,6 +174,14 @@ fn output_machine_readable(result: &CommandResult) -> Result<()> {
                 "success": true,
                 "command": "logout",
                 "was_logged_in": r.was_logged_in
+            })
+        }
+        CommandResult::Status(r) => {
+            serde_json::json!({
+                "success": true,
+                "command": "status",
+                "is_authenticated": r.is_authenticated,
+                "token_id": r.token_id
             })
         }
         CommandResult::Upload(r) => {

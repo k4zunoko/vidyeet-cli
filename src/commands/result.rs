@@ -11,6 +11,7 @@ pub enum CommandResult {
     Login(LoginResult),
     Logout(LogoutResult),
     Upload(UploadResult),
+    Status(StatusResult),
     Help,
 }
 
@@ -26,6 +27,15 @@ pub struct LoginResult {
 pub struct LogoutResult {
     /// ログイン状態だったか
     pub was_logged_in: bool,
+}
+
+/// ステータスコマンドの結果
+#[derive(Debug, Clone, Serialize)]
+pub struct StatusResult {
+    /// 認証が通っているか
+    pub is_authenticated: bool,
+    /// マスキングされたToken ID（認証情報がある場合）
+    pub token_id: Option<String>,
 }
 
 /// アップロードコマンドの結果
@@ -80,6 +90,13 @@ impl CommandResult {
                 }
             }
             CommandResult::Upload(_) => "Upload completed successfully!".to_string(),
+            CommandResult::Status(r) => {
+                if r.is_authenticated {
+                    "Authenticated".to_string()
+                } else {
+                    "Not authenticated".to_string()
+                }
+            }
             CommandResult::Help => "".to_string(),
         }
     }
