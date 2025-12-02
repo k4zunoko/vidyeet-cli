@@ -232,13 +232,13 @@ fn output_human_readable(result: &CommandResult) -> Result<()> {
                 eprintln!("✓ Login credentials updated!");
                 eprintln!("New authentication credentials have been saved.");
             } else {
-                eprintln!("✓ Login successful!");
+                eprintln!("Login successful.");
                 eprintln!("Authentication credentials have been saved.");
             }
         }
         CommandResult::Logout(r) => {
             if r.was_logged_in {
-                eprintln!("✓ Logged out successfully.");
+                eprintln!("Logged out successfully.");
                 eprintln!("Authentication credentials have been removed.");
             } else {
                 eprintln!("Already logged out.");
@@ -247,24 +247,24 @@ fn output_human_readable(result: &CommandResult) -> Result<()> {
         CommandResult::Status(r) => {
             eprintln!();
             if r.is_authenticated {
-                eprintln!("✓ Authenticated");
+                eprintln!("Authenticated");
                 if let Some(token_id) = &r.token_id {
-                    eprintln!("  Token ID: {}", token_id);
+                    eprintln!("Token ID: {}", token_id);
                 }
                 eprintln!();
-                eprintln!("  Your credentials are valid and working.");
+                eprintln!("Your credentials are valid and working.");
             } else if let Some(token_id) = &r.token_id {
                 // 認証情報はあるが検証失敗
                 eprintln!("✗ Authentication failed");
                 eprintln!("  Token ID: {}", token_id);
                 eprintln!();
-                eprintln!("  Your credentials may be invalid or expired.");
-                eprintln!("  Please run 'vidyeet login' to update your credentials.");
+                eprintln!("Your credentials may be invalid or expired.");
+                eprintln!("Please run 'vidyeet login' to update your credentials.");
             } else {
                 // 認証情報が存在しない
-                eprintln!("✗ Not logged in");
-                eprintln!("  No authentication credentials found.");
-                eprintln!("  Please run 'vidyeet login' to authenticate.");
+                eprintln!("Not logged in");
+                eprintln!("No authentication credentials found.");
+                eprintln!("Please run 'vidyeet login' to authenticate.");
             }
         }
         CommandResult::List(r) => {
@@ -276,29 +276,29 @@ fn output_human_readable(result: &CommandResult) -> Result<()> {
                 // ユーザー設定を読み込んでタイムゾーン設定を取得
                 let user_config = crate::config::user::UserConfig::load().ok();
                 
-                eprintln!("✓ Found {} video(s):", r.total_count);
+                eprintln!("Found {} video(s):", r.total_count);
                 eprintln!();
                 for (idx, video) in r.videos.iter().enumerate() {
-                    eprintln!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-                    eprintln!("  Video #{}", idx + 1);
-                    eprintln!("  Asset ID: {}", video.asset_id);
-                    eprintln!("  Status: {}", video.status);
+                    eprintln!("---");
+                    eprintln!("Video #{}", idx + 1);
+                    eprintln!("Asset ID: {}", video.asset_id);
+                    eprintln!("Status: {}", video.status);
                     
                     if let Some(duration) = video.duration {
                         let minutes = (duration / 60.0) as u64;
                         let seconds = (duration % 60.0) as u64;
-                        eprintln!("  Duration: {}:{:02}", minutes, seconds);
+                        eprintln!("Duration: {}:{:02}", minutes, seconds);
                     }
                     
                     if let Some(aspect_ratio) = &video.aspect_ratio {
-                        eprintln!("  Aspect Ratio: {}", aspect_ratio);
+                        eprintln!("Aspect Ratio: {}", aspect_ratio);
                     }
                     
                     if let Some(hls_url) = &video.hls_url {
-                        eprintln!("  🎬 HLS URL: {}", hls_url);
+                        eprintln!("HLS URL: {}", hls_url);
                     }
                     if let Some(mp4_url) = &video.mp4_url {
-                        eprintln!("  📦 MP4 URL: {}", mp4_url);
+                        eprintln!("MP4 URL: {}", mp4_url);
                     }
                     
                     // 作成日時をフォーマット（ユーザー設定のタイムゾーンを使用）
@@ -307,28 +307,27 @@ fn output_human_readable(result: &CommandResult) -> Result<()> {
                     } else {
                         video.created_at.clone()
                     };
-                    eprintln!("  Created: {}", formatted_time);
+                    eprintln!("Created: {}", formatted_time);
                     eprintln!();
                 }
-                eprintln!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+                eprintln!("---");
             }
         }
         CommandResult::Upload(r) => {
-            eprintln!("\n✓ Upload completed successfully!");
-            eprintln!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-            eprintln!("  Asset ID: {}", r.asset_id);
+            eprintln!("\nUpload completed successfully!");
+            eprintln!("---");
+            eprintln!("Asset ID: {}", r.asset_id);
             
             // HLS再生URL（すぐに利用可能）
             if let Some(hls_url) = &r.hls_url {
-                eprintln!("\n  🎬 HLS Streaming URL (ready now):");
-                eprintln!("     {}", hls_url);
+                eprintln!("\nHLS Streaming URL:");
+                eprintln!("{}", hls_url);
             }
             
             // MP4再生URL
-            eprintln!("\n  📦 MP4 Download URL:");
+            eprintln!("\nMP4 Download URL:");
             if let Some(mp4_url) = &r.mp4_url {
-                eprintln!("     Status: ✓ Ready");
-                eprintln!("     {}", mp4_url);
+                eprintln!("{}", mp4_url);
             } else {
                 // MP4生成中の場合、予測URLを表示（playback_idベース）
                 let predicted_url = if let Some(pid) = &r.playback_id {
@@ -337,14 +336,13 @@ fn output_human_readable(result: &CommandResult) -> Result<()> {
                     // playback_idが未取得の場合は予測不能。案内のみ。
                     String::from("(playback_id not available yet)")
                 };
-                eprintln!("     Status: ⏳ Generating...");
-                eprintln!("     {}", predicted_url);
-                eprintln!("\n     Note: MP4 file is being generated in the background (usually 2-5 minutes).");
-                eprintln!("           The URL above will be available once generation completes.");
-                eprintln!("           You can start streaming with HLS URL immediately!");
+                eprintln!("{}", predicted_url);
+                eprintln!("\nNote: MP4 file is being generated in the background (usually 2-5 minutes).");
+                eprintln!("The URL above will be available once generation completes.");
+                eprintln!("You can start streaming with HLS URL immediately!");
             }
             
-            eprintln!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            eprintln!("---");
 
             // 削除した動画がある場合
             if r.deleted_old_videos > 0 {
@@ -449,36 +447,36 @@ fn output_machine_readable(result: &CommandResult) -> Result<()> {
 fn display_upload_progress(progress: &UploadProgress) {
     match &progress.phase {
         UploadPhase::ValidatingFile { file_path } => {
-            eprintln!("🔍 Validating file: {}", file_path);
+            eprintln!("Validating file: {}", file_path);
         }
         UploadPhase::FileValidated { file_name, size_bytes, format } => {
             let size_mb = *size_bytes as f64 / 1_048_576.0;
-            eprintln!("✓ File validated: {} ({:.2} MB, {})", file_name, size_mb, format);
+            eprintln!("File validated: {} ({:.2} MB, {})", file_name, size_mb, format);
         }
         UploadPhase::CreatingDirectUpload { file_name } => {
-            eprintln!("🔗 Creating upload session for: {}", file_name);
+            eprintln!("Creating upload session for: {}", file_name);
         }
         UploadPhase::DirectUploadCreated { upload_id } => {
-            eprintln!("✓ Upload session created (ID: {})", upload_id);
+            eprintln!("Upload session created (ID: {})", upload_id);
         }
         UploadPhase::UploadingFile { file_name, size_bytes } => {
             let size_mb = *size_bytes as f64 / 1_048_576.0;
-            eprintln!("📤 Uploading file: {} ({:.2} MB)...", file_name, size_mb);
+            eprintln!("Uploading file: {} ({:.2} MB)...", file_name, size_mb);
         }
         UploadPhase::FileUploaded { file_name, size_bytes } => {
             let size_mb = *size_bytes as f64 / 1_048_576.0;
-            eprintln!("✓ File uploaded: {} ({:.2} MB)", file_name, size_mb);
+            eprintln!("File uploaded: {} ({:.2} MB)", file_name, size_mb);
         }
         UploadPhase::WaitingForAsset { elapsed_secs, .. } => {
             if *elapsed_secs == 0 {
-                eprintln!("⏳ Waiting for asset creation...");
+                eprintln!("Waiting for asset creation...");
             } else if *elapsed_secs % 10 == 0 {
                 // 10秒ごとに経過時間を更新
-                eprintln!("⏳ Still waiting... ({}s elapsed)", elapsed_secs);
+                eprintln!("Still waiting... ({}s elapsed)", elapsed_secs);
             }
         }
         UploadPhase::Completed { asset_id } => {
-            eprintln!("✓ Asset created: {}", asset_id);
+            eprintln!("Asset created: {}", asset_id);
         }
     }
 }
