@@ -5,6 +5,7 @@ use crate::api::types::{DirectUploadResponse, AssetResponse, AssetsListResponse,
 use crate::commands::result::{CommandResult, UploadResult, Mp4Status};
 use crate::config::{APP_CONFIG, UserConfig};
 use crate::domain::validator;
+use crate::domain::progress::{UploadProgress, UploadPhase};
 use anyhow::{Context, Result, bail};
 use std::time::Duration;
 use tokio::time::sleep;
@@ -13,6 +14,7 @@ use tokio::time::sleep;
 ///
 /// # 引数
 /// * `file_path` - アップロード対象の動画ファイルのパス
+/// * `progress_tx` - 進捗通知用チャネルの送信側（オプション）
 ///
 /// # 戻り値
 /// 成功・失敗を示すResult<CommandResult>
@@ -21,7 +23,24 @@ use tokio::time::sleep;
 /// このレイヤーでは anyhow::Result を返し、
 /// ドメイン層・インフラ層のエラーを集約する。
 
-pub async fn execute(file_path: &str) -> Result<CommandResult> {
+pub async fn execute(
+    file_path: &str,
+    progress_tx: Option<tokio::sync::mpsc::Sender<UploadProgress>>,
+) -> Result<CommandResult> {
+    // 進捗通知ヘルパー関数
+    let notify = |phase: UploadPhase| {
+        let tx = progress_tx.clone();
+        async move {
+            if let Some(tx) = tx {
+                let _ = tx.send(UploadProgress::new(phase)).await;
+            }
+        }
+    };
+
+    // ファイル検証開始
+    notify(UploadPhase::ValidatingFile {
+        file_path: file_path.to_string(),
+    }).await;
 
     // ユーザー設定を読み込み
     let user_config = UserConfig::load()
@@ -36,25 +55,75 @@ pub async fn execute(file_path: &str) -> Result<CommandResult> {
     let validation =
         validator::validate_upload_file(file_path).context("File validation failed")?;
 
+    // ファイル検証完了
+    notify(UploadPhase::FileValidated {
+        file_name: std::path::Path::new(&validation.path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(&validation.path)
+            .to_string(),
+        size_bytes: validation.size,
+        format: validation.extension.clone(),
+    }).await;
+
     // 認証マネージャーとAPIクライアントを初期化
     let auth_manager = AuthManager::new(auth.token_id.clone(), auth.token_secret.clone());
     let client = ApiClient::new(APP_CONFIG.api.endpoint.to_string())
         .context("Failed to create API client")?;
 
+    // Direct Upload URL作成開始
+    let file_name = std::path::Path::new(&validation.path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(&validation.path)
+        .to_string();
+    
+    notify(UploadPhase::CreatingDirectUpload {
+        file_name: file_name.clone(),
+    }).await;
+
     // Direct Uploadを開始（制限エラー時に古いものを削除して一度だけ再試行）
     let (upload, deleted_count) = create_direct_upload_with_capacity(&client, &auth_manager).await
         .context("Failed to create Direct Upload (with capacity handling)")?;
     
+    // Direct Upload作成完了
+    notify(UploadPhase::DirectUploadCreated {
+        upload_id: upload.data.id.clone(),
+    }).await;
+    
     let upload_url = upload.data.url.as_ref()
         .ok_or_else(|| anyhow::anyhow!("Upload URL not found in response"))?;
+
+    // ファイルアップロード開始
+    notify(UploadPhase::UploadingFile {
+        file_name: file_name.clone(),
+        size_bytes: validation.size,
+    }).await;
 
     // ファイルをアップロード
     upload_file(&client, upload_url, file_path).await
         .context("Failed to upload file")?;
 
+    // ファイルアップロード完了
+    notify(UploadPhase::FileUploaded {
+        file_name: file_name.clone(),
+        size_bytes: validation.size,
+    }).await;
+
+    // アセット作成完了待機開始
+    notify(UploadPhase::WaitingForAsset {
+        upload_id: upload.data.id.clone(),
+        elapsed_secs: 0,
+    }).await;
+
     // アップロードとアセット作成の完了を待機
-    let asset = wait_for_upload_completion(&client, &auth_manager, &upload.data.id).await
+    let asset = wait_for_upload_completion(&client, &auth_manager, &upload.data.id, progress_tx.clone()).await
         .context("Failed to wait for upload completion")?;
+
+    // 完了
+    notify(UploadPhase::Completed {
+        asset_id: asset.data.id.clone(),
+    }).await;
 
     // 結果を構造化して返す
     let hls_url = asset.get_playback_url();
@@ -250,11 +319,22 @@ async fn wait_for_upload_completion(
     client: &ApiClient,
     auth_manager: &AuthManager,
     upload_id: &str,
+    progress_tx: Option<tokio::sync::mpsc::Sender<UploadProgress>>,
 ) -> Result<AssetResponse> {
     let auth_header = auth_manager.get_auth_header();
     let max_iterations = APP_CONFIG.upload.max_wait_secs / APP_CONFIG.upload.poll_interval_secs;
+    let start_time = std::time::Instant::now();
 
     for _i in 0..max_iterations {
+        // 経過時間を進捗通知
+        if let Some(ref tx) = progress_tx {
+            let elapsed = start_time.elapsed().as_secs();
+            let _ = tx.send(UploadProgress::new(UploadPhase::WaitingForAsset {
+                upload_id: upload_id.to_string(),
+                elapsed_secs: elapsed,
+            })).await;
+        }
+
         // Upload情報を取得
         let response = client
             .get(

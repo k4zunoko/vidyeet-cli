@@ -1,4 +1,5 @@
 use crate::commands::{self, CommandResult};
+use crate::domain::progress::{UploadProgress, UploadPhase};
 use anyhow::{Context, Result, bail};
 use std::io::{self, Write};
 
@@ -78,8 +79,31 @@ pub async fn parse_args(args: &[String]) -> Result<()> {
             let file_path = args
                 .get(command_start_index + 1)
                 .context("Please specify a file path for upload command")?;
-            commands::upload::execute(file_path)
+            
+            // 進捗通知チャネルを作成
+            let (progress_tx, mut progress_rx) = tokio::sync::mpsc::channel::<UploadProgress>(32);
+            
+            // アップロード処理を別タスクで開始
+            let upload_handle = tokio::spawn({
+                let file_path = file_path.to_string();
+                async move {
+                    commands::upload::execute(&file_path, Some(progress_tx)).await
+                }
+            });
+            
+            // 進捗受信ループ（プレゼンテーション層の責務）
+            while let Some(progress) = progress_rx.recv().await {
+                if !machine_output {
+                    // 人間向け進捗表示（stderr）
+                    display_upload_progress(&progress);
+                }
+                // --machine フラグでは進捗メッセージを抑制
+            }
+            
+            // アップロード完了を待機
+            upload_handle
                 .await
+                .context("Upload task panicked")?
                 .context("Upload command failed")?
         }
         "help" => {
@@ -417,3 +441,45 @@ fn output_machine_readable(result: &CommandResult) -> Result<()> {
     println!("{}", serde_json::to_string(&json)?);
     Ok(())
 }
+
+/// アップロード進捗を人間向けに表示（stderr）
+///
+/// プレゼンテーション層の責務として、ドメイン層のイベントを
+/// ユーザーフレンドリーなメッセージに変換します。
+fn display_upload_progress(progress: &UploadProgress) {
+    match &progress.phase {
+        UploadPhase::ValidatingFile { file_path } => {
+            eprintln!("🔍 Validating file: {}", file_path);
+        }
+        UploadPhase::FileValidated { file_name, size_bytes, format } => {
+            let size_mb = *size_bytes as f64 / 1_048_576.0;
+            eprintln!("✓ File validated: {} ({:.2} MB, {})", file_name, size_mb, format);
+        }
+        UploadPhase::CreatingDirectUpload { file_name } => {
+            eprintln!("🔗 Creating upload session for: {}", file_name);
+        }
+        UploadPhase::DirectUploadCreated { upload_id } => {
+            eprintln!("✓ Upload session created (ID: {})", upload_id);
+        }
+        UploadPhase::UploadingFile { file_name, size_bytes } => {
+            let size_mb = *size_bytes as f64 / 1_048_576.0;
+            eprintln!("📤 Uploading file: {} ({:.2} MB)...", file_name, size_mb);
+        }
+        UploadPhase::FileUploaded { file_name, size_bytes } => {
+            let size_mb = *size_bytes as f64 / 1_048_576.0;
+            eprintln!("✓ File uploaded: {} ({:.2} MB)", file_name, size_mb);
+        }
+        UploadPhase::WaitingForAsset { elapsed_secs, .. } => {
+            if *elapsed_secs == 0 {
+                eprintln!("⏳ Waiting for asset creation...");
+            } else if *elapsed_secs % 10 == 0 {
+                // 10秒ごとに経過時間を更新
+                eprintln!("⏳ Still waiting... ({}s elapsed)", elapsed_secs);
+            }
+        }
+        UploadPhase::Completed { asset_id } => {
+            eprintln!("✓ Asset created: {}", asset_id);
+        }
+    }
+}
+
