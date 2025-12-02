@@ -187,24 +187,6 @@ pub struct AssetsListResponse {
     pub next_cursor: Option<String>,
 }
 
-impl DirectUploadResponse {
-    /// レスポンスが有効かチェック
-    pub fn is_valid(&self) -> bool {
-        !self.data.id.is_empty() 
-            && self.data.url.as_ref().map_or(false, |u| !u.is_empty())
-    }
-
-    /// アップロードURLを取得
-    pub fn get_upload_url(&self) -> Option<&str> {
-        self.data.url.as_deref()
-    }
-
-    /// Upload IDを取得
-    pub fn get_upload_id(&self) -> &str {
-        &self.data.id
-    }
-}
-
 impl AssetResponse {
     /// 再生URLを構築（HLS形式）
     pub fn get_playback_url(&self) -> Option<String> {
@@ -255,7 +237,7 @@ mod tests {
         assert_eq!(response.data.id, "upload_abc123");
         assert_eq!(response.data.timeout, 3600);
         assert_eq!(response.data.status, "waiting");
-        assert!(response.is_valid());
+        assert!(!response.data.id.is_empty() && response.data.url.is_some());
     }
 
     #[test]

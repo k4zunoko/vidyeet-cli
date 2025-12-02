@@ -25,15 +25,6 @@ impl AuthManager {
         }
     }
 
-    /// UserConfigから認証マネージャーを作成
-    ///
-    /// # Arguments
-    /// * `token_id` - Mux Access Token ID
-    /// * `token_secret` - Mux Access Token Secret
-    pub fn from_credentials(token_id: String, token_secret: String) -> Self {
-        Self::new(token_id, token_secret)
-    }
-
     /// HTTP Basic認証ヘッダーの値を生成
     ///
     /// # Returns
@@ -59,11 +50,6 @@ impl AuthManager {
         ApiClient::check_response(response, "/video/v1/assets").await?;
 
         Ok(())
-    }
-
-    /// Token IDを取得（マスキング用）
-    pub fn get_token_id(&self) -> &str {
-        &self.token_id
     }
 
     /// Token IDをマスキングして表示
