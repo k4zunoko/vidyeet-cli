@@ -70,7 +70,7 @@ Authenticating...
 vidyeet upload video.mp4
 ```
 
-**出力例（TTY接続時）:**
+**出力例（通常モード）:**
 
 ```
 ✓ Upload completed successfully!
@@ -86,10 +86,10 @@ vidyeet upload video.mp4
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-**出力例（パイプライン）:**
+**出力例（--machineフラグ指定時）:**
 
 ```powershell
-vidyeet upload video.mp4 | ConvertFrom-Json
+vidyeet --machine upload video.mp4 | ConvertFrom-Json
 ```
 
 ```json
@@ -116,7 +116,19 @@ vidyeet upload video.mp4 | ConvertFrom-Json
 vidyeet logout
 ```
 
-### 4. ヘルプ
+### 4. 機械可読出力（スクリプト向け）
+
+`--machine`フラグを使用すると、JSON形式で結果を出力します。
+
+```powershell
+vidyeet --machine upload video.mp4
+vidyeet --machine status
+vidyeet --machine list
+```
+
+**注意**: `--machine`はグローバルフラグのため、コマンド名の前に指定します。
+
+### 5. ヘルプ
 
 ```powershell
 vidyeet help

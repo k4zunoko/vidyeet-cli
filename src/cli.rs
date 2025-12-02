@@ -1,6 +1,6 @@
 use crate::commands::{self, CommandResult};
 use anyhow::{Context, Result, bail};
-use std::io::{self, IsTerminal, Write};
+use std::io::{self, Write};
 
 /// CLI引数を解析し、適切なコマンドにディスパッチする
 pub async fn parse_args(args: &[String]) -> Result<()> {
@@ -9,12 +9,24 @@ pub async fn parse_args(args: &[String]) -> Result<()> {
         return Ok(());
     }
 
-    let command = &args[1];
+    // グローバルフラグ --machine のチェック
+    let (machine_output, command_start_index) = if args.len() > 1 && args[1] == "--machine" {
+        (true, 2)
+    } else {
+        (false, 1)
+    };
+
+    if args.len() < command_start_index + 1 {
+        print_usage();
+        return Ok(());
+    }
+
+    let command = &args[command_start_index];
 
     let result = match command.as_str() {
         "login" => {
             // --stdin フラグをチェック
-            let use_stdin = args.get(2).map(|s| s.as_str()) == Some("--stdin");
+            let use_stdin = args.get(command_start_index + 1).map(|s| s.as_str()) == Some("--stdin");
             
             let credentials = if use_stdin {
                 // stdin からパイプで認証情報を取得
@@ -22,9 +34,6 @@ pub async fn parse_args(args: &[String]) -> Result<()> {
                     .context("Failed to read credentials from stdin")?
             } else {
                 // 対話的入力の場合
-                if !io::stdin().is_terminal() {
-                    bail!("Interactive input requires a TTY. Use '--stdin' flag for non-interactive input.");
-                }
                 
                 // 案内メッセージを表示（プレゼンテーション層の責務）
                 eprintln!("Logging in to Mux Video...");
@@ -56,9 +65,6 @@ pub async fn parse_args(args: &[String]) -> Result<()> {
                 .context("Logout command failed")?
         }
         "status" => {
-            eprintln!("Checking authentication status...");
-            eprintln!();
-            
             commands::status::execute()
                 .await
                 .context("Status command failed")?
@@ -70,7 +76,7 @@ pub async fn parse_args(args: &[String]) -> Result<()> {
         }
         "upload" => {
             let file_path = args
-                .get(2)
+                .get(command_start_index + 1)
                 .context("Please specify a file path for upload command")?;
             commands::upload::execute(file_path)
                 .await
@@ -88,14 +94,18 @@ pub async fn parse_args(args: &[String]) -> Result<()> {
     };
 
     // コマンド結果を出力
-    output_result(&result)?;
+    output_result(&result, machine_output)?;
 
     Ok(())
 }
 
 /// コマンド使用方法を表示する
 fn print_usage() {
-    eprintln!("Usage: vidyeet <command> [args...]");
+    eprintln!("Usage: vidyeet [--machine] <command> [args...]");
+    eprintln!();
+    eprintln!("Global Flags:");
+    eprintln!("  --machine        - Output machine-readable JSON to stdout (for scripting)");
+    eprintln!();
     eprintln!("Available commands:");
     eprintln!("  login            - Login to Mux Video (credentials entered interactively)");
     eprintln!("  logout           - Logout from Mux Video");
@@ -105,7 +115,7 @@ fn print_usage() {
     eprintln!("  help             - Display this help message");
 }
 
-/// 対話的に認証情報を取得（TTY必須）
+/// 対話的に認証情報を取得
 /// 
 /// プレゼンテーション層の責務として、ユーザー入力を取得し検証する
 fn read_credentials_interactive() -> Result<commands::login::LoginCredentials> {
@@ -175,17 +185,15 @@ fn read_credentials_from_stdin() -> Result<commands::login::LoginCredentials> {
 
 /// コマンド結果を適切な形式で出力する
 /// 
-/// TTY接続時: 人間向けの詳細メッセージ（stderr）
-/// パイプ/リダイレクト時: 機械可読JSON（stdout）
-fn output_result(result: &CommandResult) -> Result<()> {
-    let is_terminal = std::io::stdout().is_terminal();
-
-    if is_terminal {
-        // 人間向け出力（stderr）
-        output_human_readable(result)?;
-    } else {
+/// --machineフラグなし: 人間向けの詳細メッセージ（stderr）
+/// --machineフラグあり: 機械可読JSON（stdout）
+fn output_result(result: &CommandResult, machine_output: bool) -> Result<()> {
+    if machine_output {
         // 機械可読出力（stdout）
         output_machine_readable(result)?;
+    } else {
+        // 人間向け出力（stderr）
+        output_human_readable(result)?;
     }
 
     Ok(())
