@@ -1,16 +1,9 @@
-/// ヘルプ情報を表示する
-pub fn execute() {
-    eprintln!("Mux Video CLI");
-    eprintln!("Upload videos to Mux Video easily from the command line");
-    eprintln!();
-    eprintln!("Usage:");
-    eprintln!("  vidyeet <command> [args...]");
-    eprintln!();
-    eprintln!("Commands:");
-    eprintln!("  login          - Login to Mux Video");
-    eprintln!("  logout         - Logout from Mux Video");
-    eprintln!("  status         - Check authentication status");
-    eprintln!("  list           - List all uploaded videos");
-    eprintln!("  upload <file>  - Upload a video file");
-    eprintln!("  help           - Display this help message");
+use crate::commands::result::CommandResult;
+
+/// ヘルプコマンドを実行
+///
+/// # Returns
+/// 成功時はOk(CommandResult)、失敗時はエラー
+pub async fn execute() -> anyhow::Result<CommandResult> {
+    Ok(CommandResult::Help)
 }

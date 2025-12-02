@@ -77,8 +77,9 @@ pub async fn parse_args(args: &[String]) -> Result<()> {
                 .context("Upload command failed")?
         }
         "help" => {
-            commands::help::execute();
-            return Ok(());
+            commands::help::execute()
+                .await
+                .context("Help command failed")?
         }
         _ => bail!(
             "Unknown command: '{}'. Use 'help' to see available commands.",
@@ -320,7 +321,19 @@ fn output_human_readable(result: &CommandResult) -> Result<()> {
             }
         }
         CommandResult::Help => {
-            // Help コマンドは既に出力済み
+            eprintln!("Mux Video CLI");
+            eprintln!("Upload videos to Mux Video easily from the command line");
+            eprintln!();
+            eprintln!("Usage:");
+            eprintln!("  vidyeet <command> [args...]");
+            eprintln!();
+            eprintln!("Commands:");
+            eprintln!("  login          - Login to Mux Video");
+            eprintln!("  logout         - Logout from Mux Video");
+            eprintln!("  status         - Check authentication status");
+            eprintln!("  list           - List all uploaded videos");
+            eprintln!("  upload <file>  - Upload a video file");
+            eprintln!("  help           - Display this help message");
         }
     }
 

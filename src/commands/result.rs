@@ -101,37 +101,3 @@ pub struct VideoInfo {
     /// アスペクト比
     pub aspect_ratio: Option<String>,
 }
-
-impl CommandResult {
-    /// 成功メッセージを取得（人間向け出力用）
-    pub fn success_message(&self) -> String {
-        match self {
-            CommandResult::Login(r) => {
-                if r.was_logged_in {
-                    "Login credentials updated!".to_string()
-                } else {
-                    "Login successful!".to_string()
-                }
-            }
-            CommandResult::Logout(r) => {
-                if r.was_logged_in {
-                    "Logged out successfully.".to_string()
-                } else {
-                    "Already logged out.".to_string()
-                }
-            }
-            CommandResult::Upload(_) => "Upload completed successfully!".to_string(),
-            CommandResult::Status(r) => {
-                if r.is_authenticated {
-                    "Authenticated".to_string()
-                } else {
-                    "Not authenticated".to_string()
-                }
-            }
-            CommandResult::List(r) => {
-                format!("Found {} video(s)", r.total_count)
-            }
-            CommandResult::Help => "".to_string(),
-        }
-    }
-}
