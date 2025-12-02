@@ -9,23 +9,13 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum InfraError {
-    /// ファイルシステムエラー
-    #[error("file system error: {context}")]
-    FileSystem {
-        context: String,
-        #[source]
-        source: io::Error,
-    },
-
-    /// ネットワークエラー（将来実装）
+    /// ネットワークエラー
     #[error("network error: {message}")]
     Network {
         message: String,
-        // #[from]
-        // source: reqwest::Error,
     },
 
-    /// API通信エラー（将来実装）
+    /// API通信エラー
     #[error("API error: {endpoint} - {message}")]
     Api {
         endpoint: String,
@@ -43,27 +33,6 @@ pub enum InfraError {
 }
 
 impl InfraError {
-    /// ファイルシステムエラーを作成
-    pub fn file_system(context: impl Into<String>, source: io::Error) -> Self {
-        Self::FileSystem {
-            context: context.into(),
-            source,
-        }
-    }
-
-    /// APIエラーを作成
-    pub fn api(
-        endpoint: impl Into<String>,
-        message: impl Into<String>,
-        status_code: Option<u16>,
-    ) -> Self {
-        Self::Api {
-            endpoint: endpoint.into(),
-            message: message.into(),
-            status_code,
-        }
-    }
-
     /// ネットワークエラーを作成
     pub fn network(message: impl Into<String>) -> Self {
         Self::Network {
@@ -71,28 +40,8 @@ impl InfraError {
         }
     }
 
-    /// リトライ可能かどうかを判定
-    pub fn is_retryable(&self) -> bool {
-        match self {
-            Self::Network { .. } => true,
-            Self::Timeout { .. } => true,
-            Self::Api { status_code, .. } => {
-                // 5xx系のステータスコードはリトライ可能
-                status_code
-                    .map(|code| code >= 500 && code < 600)
-                    .unwrap_or(false)
-            }
-            _ => false,
-        }
-    }
-
     /// エラーの深刻度を返す
     pub fn severity(&self) -> ErrorSeverity {
-        match self {
-            Self::FileSystem { .. } | Self::Io(_) => ErrorSeverity::SystemError,
-            Self::Network { .. } | Self::Timeout { .. } | Self::Api { .. } => {
-                ErrorSeverity::SystemError
-            }
-        }
+        ErrorSeverity::SystemError
     }
 }
