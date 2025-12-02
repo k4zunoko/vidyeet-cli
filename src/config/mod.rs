@@ -63,10 +63,7 @@ mod tests {
 
         // 認証情報で設定を作成
         let mut config = UserConfig {
-            default_title: Some("Test Title".to_string()),
             auth: None,
-            auto_copy_url: true,
-            show_notification: false,
             timezone_offset_seconds: 0, // UTC
         };
         config.set_auth("test_id".to_string(), "test_secret".to_string());
@@ -83,7 +80,7 @@ mod tests {
         let config_auth = config.get_auth().expect("Auth should be present");
         assert_eq!(reloaded_auth.token_id, config_auth.token_id);
         assert_eq!(reloaded_auth.token_secret, config_auth.token_secret);
-        assert_eq!(reloaded.default_title, config.default_title);
+        assert_eq!(reloaded.timezone_offset_seconds, config.timezone_offset_seconds);
     }
 
     #[test]
@@ -96,10 +93,7 @@ mod tests {
 
         // UserConfig: 有効な設定を作成してテスト
         let mut user_config = UserConfig {
-            default_title: Some("My Video".to_string()),
             auth: None,
-            auto_copy_url: true,
-            show_notification: true,
             timezone_offset_seconds: 0, // UTC
         };
         user_config.set_auth("test_id".to_string(), "test_secret".to_string());

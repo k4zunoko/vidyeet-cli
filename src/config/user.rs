@@ -11,9 +11,6 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
-const DEFAULT_TITLE: &str = "My Video";
-const DEFAULT_AUTO_COPY_URL: bool = false;
-const DEFAULT_SHOW_NOTIFICATION: bool = false;
 const DEFAULT_TIMEZONE_OFFSET: i32 = 0; // UTC offset in seconds
 
 /// Mux認証設定
@@ -29,19 +26,8 @@ pub struct AuthConfig {
 /// ユーザー設定
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserConfig {
-    /// デフォルトのビデオタイトル
-    pub default_title: Option<String>,
-
     /// Mux認証情報
     pub auth: Option<AuthConfig>,
-
-    /// アップロード後に自動的にURLをクリップボードにコピーするか
-    #[serde(default = "default_auto_copy_url")]
-    pub auto_copy_url: bool,
-
-    /// アップロード完了時に通知を表示するか
-    #[serde(default = "default_show_notification")]
-    pub show_notification: bool,
 
     /// タイムゾーンオフセット(秒単位)
     /// 例: UTC=0, JST(UTC+9)=32400, PST(UTC-8)=-28800
@@ -50,14 +36,6 @@ pub struct UserConfig {
 }
 
 // プライベート関数（serde用）
-fn default_auto_copy_url() -> bool {
-    DEFAULT_AUTO_COPY_URL
-}
-
-fn default_show_notification() -> bool {
-    DEFAULT_SHOW_NOTIFICATION
-}
-
 fn default_timezone_offset() -> i32 {
     DEFAULT_TIMEZONE_OFFSET
 }
@@ -65,10 +43,7 @@ fn default_timezone_offset() -> i32 {
 impl Default for UserConfig {
     fn default() -> Self {
         Self {
-            default_title: Some(DEFAULT_TITLE.to_string()),
             auth: None,
-            auto_copy_url: DEFAULT_AUTO_COPY_URL,
-            show_notification: DEFAULT_SHOW_NOTIFICATION,
             timezone_offset_seconds: DEFAULT_TIMEZONE_OFFSET,
         }
     }
@@ -175,15 +150,12 @@ impl UserConfig {
         format!(
             r#"# Mux Video CLI - User Configuration
 # Authentication credentials are set with 'vidyeet login'
-default_title = "{}"
-auto_copy_url = {}
-show_notification = {}
 
 # Timezone offset in seconds
 # Examples: UTC=0, JST(UTC+9)=32400, PST(UTC-8)=-28800
 timezone_offset_seconds = {}
 "#,
-            DEFAULT_TITLE, DEFAULT_AUTO_COPY_URL, DEFAULT_SHOW_NOTIFICATION, DEFAULT_TIMEZONE_OFFSET
+            DEFAULT_TIMEZONE_OFFSET
         )
     }
 
@@ -311,10 +283,7 @@ mod tests {
     fn test_has_auth() {
         // 認証情報の有無を正しく判定できることを確認
         let mut config = UserConfig {
-            default_title: None,
             auth: None,
-            auto_copy_url: false,
-            show_notification: true,
             timezone_offset_seconds: 0,
         };
 
@@ -376,10 +345,7 @@ mod tests {
 
         // テスト用の設定を作成
         let mut test_config = UserConfig {
-            default_title: Some("Test Video Title".to_string()),
             auth: None,
-            auto_copy_url: true,
-            show_notification: false,
             timezone_offset_seconds: 32400, // JST = UTC+9
         };
         test_config.set_auth("test_id_xyz".to_string(), "test_secret_xyz".to_string());
@@ -405,16 +371,8 @@ mod tests {
             "Token secrets should match"
         );
         assert_eq!(
-            loaded_config.default_title, test_config.default_title,
-            "Titles should match"
-        );
-        assert_eq!(
-            loaded_config.auto_copy_url, test_config.auto_copy_url,
-            "auto_copy_url should match"
-        );
-        assert_eq!(
-            loaded_config.show_notification, test_config.show_notification,
-            "show_notification should match"
+            loaded_config.timezone_offset_seconds, test_config.timezone_offset_seconds,
+            "timezone_offset_seconds should match"
         );
     }
 
@@ -427,13 +385,10 @@ mod tests {
         if let Some(parent) = config_path.parent() {
             // テスト用の設定を保存
             let test_config = UserConfig {
-                default_title: None,
                 auth: Some(AuthConfig {
                     token_id: "test_token_id".to_string(),
                     token_secret: "test_token_secret".to_string(),
                 }),
-                auto_copy_url: false,
-                show_notification: true,
                 timezone_offset_seconds: 0,
             };
 
@@ -467,7 +422,7 @@ mod tests {
 
         // ファイルの内容を直接読んでデフォルト値が書かれていることを確認
         let content = fs::read_to_string(&config_path).expect("Failed to read config");
-        assert!(content.contains("auto_copy_url"));
+        assert!(content.contains("timezone_offset_seconds"));
         assert!(content.contains("vidyeet login"));
     }
 
@@ -475,13 +430,10 @@ mod tests {
     fn test_config_serialization() {
         // 設定のシリアライゼーションが正しく動作することを確認
         let config = UserConfig {
-            default_title: Some("My Video".to_string()),
             auth: Some(AuthConfig {
                 token_id: "test_token_id".to_string(),
                 token_secret: "test_token_secret".to_string(),
             }),
-            auto_copy_url: true,
-            show_notification: false,
             timezone_offset_seconds: 0, // UTC
         };
 
@@ -492,19 +444,14 @@ mod tests {
         assert!(serialized.contains("auth"));
         assert!(serialized.contains("token_id"));
         assert!(serialized.contains("token_secret"));
-        assert!(serialized.contains("default_title"));
-        assert!(serialized.contains("auto_copy_url"));
-        assert!(serialized.contains("show_notification"));
+        assert!(serialized.contains("timezone_offset_seconds"));
     }
 
     #[test]
     fn test_validate_accepts_config_without_auth() {
         // 認証情報なしの設定は有効
         let config = UserConfig {
-            default_title: None,
             auth: None,
-            auto_copy_url: false,
-            show_notification: true,
             timezone_offset_seconds: 0,
         };
 

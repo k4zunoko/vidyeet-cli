@@ -91,8 +91,9 @@ async fn create_direct_upload(
         "new_asset_settings": {
             "playback_policies": ["public"],
             "video_quality": "premium",
+            "max_resolution_tier": "2160p",
             "static_renditions": [
-                { "resolution": "highest" },   // 最大解像度のMP4
+                { "resolution": "highest" },
             ]
         }
     });
