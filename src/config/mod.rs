@@ -19,6 +19,7 @@
 /// ```
 pub mod app;
 pub mod error;
+pub mod permissions;
 pub mod user;
 
 pub use app::APP_CONFIG;

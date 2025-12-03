@@ -14,3 +14,9 @@ reqwest = { version = "0.11", features = ["json"] }
 tokio = { version = "1.0", features = ["full"] }
 base64 = "0.21"
 chrono = "0.4"
+
+[dev-dependencies]
+tempfile = "3.0"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.51", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem"] }
