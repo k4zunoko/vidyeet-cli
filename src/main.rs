@@ -4,6 +4,7 @@ mod commands;
 mod config;
 mod domain;
 mod error_severity;
+mod presentation;
 
 use anyhow::Result;
 use api::error::InfraError;

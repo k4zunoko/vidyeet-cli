@@ -1,6 +1,7 @@
 use crate::commands::{self, CommandResult};
 use crate::commands::result::Mp4Status;
-use crate::domain::progress::{UploadProgress, UploadPhase};
+use crate::domain::progress::UploadProgress;
+use crate::presentation::progress::DisplayProgress;
 use anyhow::{Context, Result, bail};
 use std::io::{self, Write};
 
@@ -93,12 +94,14 @@ pub async fn parse_args(args: &[String]) -> Result<()> {
                 match timeout(progress_timeout, progress_rx.recv()).await {
                     Ok(Some(progress)) => {
                         if !machine_output {
+                            // ドメイン層の型をプレゼンテーション層の型に変換
+                            let display_progress: DisplayProgress = progress.into();
                             // 人間向け進捗表示（stderr）
-                            display_upload_progress(&progress);
+                            display_upload_progress(&display_progress);
                         }
                         // --machine フラグでは進捗メッセージを抑制
                     }
-                    Ok(None) => {
+                    Ok(std::option::Option::None) => {
                         // チャネルがクローズされた（正常終了）
                         break;
                     }
@@ -440,42 +443,13 @@ fn output_machine_readable(result: &CommandResult) -> Result<()> {
 
 /// アップロード進捗を人間向けに表示（stderr）
 ///
-/// プレゼンテーション層の責務として、ドメイン層のイベントを
-/// ユーザーフレンドリーなメッセージに変換します。
-fn display_upload_progress(progress: &UploadProgress) {
-    match &progress.phase {
-        UploadPhase::ValidatingFile { file_path } => {
-            eprintln!("Validating file: {}", file_path);
-        }
-        UploadPhase::FileValidated { file_name, size_bytes, format } => {
-            let size_mb = *size_bytes as f64 / 1_048_576.0;
-            eprintln!("File validated: {} ({:.2} MB, {})", file_name, size_mb, format);
-        }
-        UploadPhase::CreatingDirectUpload { file_name } => {
-            eprintln!("Creating upload session for: {}", file_name);
-        }
-        UploadPhase::DirectUploadCreated { upload_id } => {
-            eprintln!("Upload session created (ID: {})", upload_id);
-        }
-        UploadPhase::UploadingFile { file_name, size_bytes } => {
-            let size_mb = *size_bytes as f64 / 1_048_576.0;
-            eprintln!("Uploading file: {} ({:.2} MB)...", file_name, size_mb);
-        }
-        UploadPhase::FileUploaded { file_name, size_bytes } => {
-            let size_mb = *size_bytes as f64 / 1_048_576.0;
-            eprintln!("File uploaded: {} ({:.2} MB)", file_name, size_mb);
-        }
-        UploadPhase::WaitingForAsset { elapsed_secs, .. } => {
-            if *elapsed_secs == 0 {
-                eprintln!("Waiting for asset creation...");
-            } else if *elapsed_secs % 10 == 0 {
-                // 10秒ごとに経過時間を更新
-                eprintln!("Still waiting... ({}s elapsed)", elapsed_secs);
-            }
-        }
-        UploadPhase::Completed { asset_id } => {
-            eprintln!("Asset created: {}", asset_id);
-        }
+/// プレゼンテーション層の責務として、DisplayProgressを受け取り、
+/// ユーザーフレンドリーなメッセージを表示します。
+/// ドメイン層の実装詳細（UploadPhase）には依存しません。
+fn display_upload_progress(progress: &DisplayProgress) {
+    // 空メッセージは表示しない（進捗抑制時）
+    if !progress.message.is_empty() {
+        eprintln!("{}", progress.message);
     }
 }
 
