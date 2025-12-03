@@ -94,10 +94,13 @@ pub async fn parse_args(args: &[String]) -> Result<()> {
                 match timeout(progress_timeout, progress_rx.recv()).await {
                     Ok(Some(progress)) => {
                         if !machine_output {
-                            // ドメイン層の型をプレゼンテーション層の型に変換
-                            let display_progress: DisplayProgress = progress.into();
-                            // 人間向け進捗表示（stderr）
-                            display_upload_progress(&display_progress);
+                            // ドメイン層の型をプレゼンテーション層の型に変換（借用）
+                            // Option<DisplayProgress>を返すため、表示が必要な場合のみ出力
+                            if let Some(display_progress) = Option::<DisplayProgress>::from(&progress) {
+                                // 人間向け進捗表示（stderr）
+                                display_upload_progress(&display_progress);
+                            }
+                            // Noneの場合は表示を抑制（10秒未満の経過時間更新など）
                         }
                         // --machine フラグでは進捗メッセージを抑制
                     }
@@ -226,9 +229,8 @@ fn read_credentials_from_stdin() -> Result<commands::login::LoginCredentials> {
 /// ユーザーフレンドリーなメッセージを表示します。
 /// ドメイン層の実装詳細（UploadPhase）には依存しません。
 fn display_upload_progress(progress: &DisplayProgress) {
-    // 空メッセージは表示しない（進捗抑制時）
-    if !progress.message.is_empty() {
-        eprintln!("{}", progress.message);
-    }
+    // Option<DisplayProgress>により表示すべき進捗のみ渡されるため、
+    // 空文字チェック不要（呼び出し側でif let Some()によりフィルタ済み）
+    eprintln!("{}", progress.message);
 }
 

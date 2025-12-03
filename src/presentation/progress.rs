@@ -3,6 +3,11 @@
 /// ドメイン層の`UploadProgress`をUI表示に適した形式に変換します。
 /// この変換により、プレゼンテーション層がドメイン層の実装詳細に
 /// 依存しないようにします。
+///
+/// # 設計方針
+/// - `From<&UploadProgress>`で借用による変換（所有権を奪わない）
+/// - `Option<DisplayProgress>`で表示抑制を明示的に表現
+/// - ヘルパー関数で各フェーズの変換ロジックを分離（密結合緩和）
 
 use crate::domain::progress::{UploadProgress, UploadPhase};
 
@@ -56,89 +61,124 @@ impl DisplayProgress {
 
 /// ドメイン層の`UploadProgress`からプレゼンテーション層の`DisplayProgress`への変換
 ///
-/// Rustの`From`トレイトを実装することで、型安全な変換を実現します。
-/// この変換はプレゼンテーション層の責務であり、ドメイン層は
-/// `DisplayProgress`の存在を知りません（依存方向の遵守）。
-impl From<UploadProgress> for DisplayProgress {
-    fn from(progress: UploadProgress) -> Self {
-        match progress.phase {
+/// # 設計改善
+/// - `&UploadProgress`を借用して変換（所有権を奪わない）
+/// - `Option<DisplayProgress>`を返すことで、表示しないケースを明示的に表現
+/// - ヘルパー関数で各フェーズの変換ロジックを分離し、密結合を緩和
+///
+/// # 戻り値
+/// - `Some(DisplayProgress)`: 表示すべき進捗情報
+/// - `None`: 表示を抑制（例: 10秒未満の経過時間更新）
+impl From<&UploadProgress> for Option<DisplayProgress> {
+    fn from(progress: &UploadProgress) -> Self {
+        match &progress.phase {
             UploadPhase::ValidatingFile { file_path } => {
-                DisplayProgress::new(
-                    format!("Validating file: {}", file_path),
-                    ProgressCategory::Validation,
-                )
+                Some(format_validating_file(file_path))
             }
-            UploadPhase::FileValidated {
-                file_name,
-                size_bytes,
-                format,
-            } => {
-                let size_mb = size_bytes as f64 / 1_048_576.0;
-                DisplayProgress::new(
-                    format!("File validated: {} ({:.2} MB, {})", file_name, size_mb, format),
-                    ProgressCategory::Validation,
-                )
+            UploadPhase::FileValidated { file_name, size_bytes, format } => {
+                Some(format_file_validated(file_name, *size_bytes, format))
             }
             UploadPhase::CreatingDirectUpload { file_name } => {
-                DisplayProgress::new(
-                    format!("Creating upload session for: {}", file_name),
-                    ProgressCategory::Preparation,
-                )
+                Some(format_creating_upload(file_name))
             }
             UploadPhase::DirectUploadCreated { upload_id } => {
-                DisplayProgress::new(
-                    format!("Upload session created (ID: {})", upload_id),
-                    ProgressCategory::Preparation,
-                )
+                Some(format_upload_created(upload_id))
             }
-            UploadPhase::UploadingFile {
-                file_name,
-                size_bytes,
-            } => {
-                let size_mb = size_bytes as f64 / 1_048_576.0;
-                DisplayProgress::new(
-                    format!("Uploading file: {} ({:.2} MB)...", file_name, size_mb),
-                    ProgressCategory::Upload,
-                )
+            UploadPhase::UploadingFile { file_name, size_bytes } => {
+                Some(format_uploading_file(file_name, *size_bytes))
             }
-            UploadPhase::FileUploaded {
-                file_name,
-                size_bytes,
-            } => {
-                let size_mb = size_bytes as f64 / 1_048_576.0;
-                DisplayProgress::new(
-                    format!("File uploaded: {} ({:.2} MB)", file_name, size_mb),
-                    ProgressCategory::Upload,
-                )
+            UploadPhase::FileUploaded { file_name, size_bytes } => {
+                Some(format_file_uploaded(file_name, *size_bytes))
             }
-            UploadPhase::WaitingForAsset {
-                upload_id: _,
-                elapsed_secs,
-            } => {
-                if elapsed_secs == 0 {
-                    DisplayProgress::new(
-                        "Waiting for asset creation...".to_string(),
-                        ProgressCategory::Processing,
-                    )
-                } else if elapsed_secs % 10 == 0 {
-                    // 10秒ごとに経過時間を更新
-                    DisplayProgress::new(
-                        format!("Still waiting... ({}s elapsed)", elapsed_secs),
-                        ProgressCategory::Processing,
-                    )
-                } else {
-                    // 10秒未満の更新は無視（表示を抑制）
-                    DisplayProgress::new(String::new(), ProgressCategory::Processing)
-                }
+            UploadPhase::WaitingForAsset { elapsed_secs, .. } => {
+                format_waiting_for_asset(*elapsed_secs)
             }
             UploadPhase::Completed { asset_id } => {
-                DisplayProgress::new(
-                    format!("Asset created: {}", asset_id),
-                    ProgressCategory::Completed,
-                )
+                Some(format_completed(asset_id))
             }
         }
     }
+}
+
+// ============================================================================
+// ヘルパー関数: 各フェーズの変換ロジック
+// ============================================================================
+// 各フェーズの変換ロジックを独立した関数に分離することで：
+// - match文の複雑度を削減
+// - 各フェーズの変換ロジックをテスト可能に
+// - 将来のフェーズ追加時の影響範囲を最小化
+
+fn format_validating_file(file_path: &str) -> DisplayProgress {
+    DisplayProgress::new(
+        format!("Validating file: {}", file_path),
+        ProgressCategory::Validation,
+    )
+}
+
+fn format_file_validated(file_name: &str, size_bytes: u64, format: &str) -> DisplayProgress {
+    let size_mb = size_bytes as f64 / 1_048_576.0;
+    DisplayProgress::new(
+        format!("File validated: {} ({:.2} MB, {})", file_name, size_mb, format),
+        ProgressCategory::Validation,
+    )
+}
+
+fn format_creating_upload(file_name: &str) -> DisplayProgress {
+    DisplayProgress::new(
+        format!("Creating upload session for: {}", file_name),
+        ProgressCategory::Preparation,
+    )
+}
+
+fn format_upload_created(upload_id: &str) -> DisplayProgress {
+    DisplayProgress::new(
+        format!("Upload session created (ID: {})", upload_id),
+        ProgressCategory::Preparation,
+    )
+}
+
+fn format_uploading_file(file_name: &str, size_bytes: u64) -> DisplayProgress {
+    let size_mb = size_bytes as f64 / 1_048_576.0;
+    DisplayProgress::new(
+        format!("Uploading file: {} ({:.2} MB)...", file_name, size_mb),
+        ProgressCategory::Upload,
+    )
+}
+
+fn format_file_uploaded(file_name: &str, size_bytes: u64) -> DisplayProgress {
+    let size_mb = size_bytes as f64 / 1_048_576.0;
+    DisplayProgress::new(
+        format!("File uploaded: {} ({:.2} MB)", file_name, size_mb),
+        ProgressCategory::Upload,
+    )
+}
+
+/// アセット待機中の進捗表示
+/// 
+/// 10秒ごとにのみ更新を表示し、それ以外は`None`を返すことで
+/// 過度な更新を抑制します。
+fn format_waiting_for_asset(elapsed_secs: u64) -> Option<DisplayProgress> {
+    if elapsed_secs == 0 {
+        Some(DisplayProgress::new(
+            "Waiting for asset creation...".to_string(),
+            ProgressCategory::Processing,
+        ))
+    } else if elapsed_secs % 10 == 0 {
+        Some(DisplayProgress::new(
+            format!("Still waiting... ({}s elapsed)", elapsed_secs),
+            ProgressCategory::Processing,
+        ))
+    } else {
+        // 10秒未満の更新は表示しない（明示的にNoneを返す）
+        None
+    }
+}
+
+fn format_completed(asset_id: &str) -> DisplayProgress {
+    DisplayProgress::new(
+        format!("Asset created: {}", asset_id),
+        ProgressCategory::Completed,
+    )
 }
 
 #[cfg(test)]
@@ -174,7 +214,8 @@ mod tests {
             file_path: "/path/to/file.mp4".to_string(),
         });
 
-        let display_progress: DisplayProgress = domain_progress.into();
+        let display_progress = Option::<DisplayProgress>::from(&domain_progress)
+            .expect("update should be displayed");
 
         assert_eq!(
             display_progress.message,
@@ -191,7 +232,8 @@ mod tests {
             format: "mp4".to_string(),
         });
 
-        let display_progress: DisplayProgress = domain_progress.into();
+        let display_progress = Option::<DisplayProgress>::from(&domain_progress)
+            .expect("update should be displayed");
 
         assert!(display_progress.message.contains("video.mp4"));
         assert!(display_progress.message.contains("10.00 MB"));
@@ -205,7 +247,8 @@ mod tests {
             elapsed_secs: 0,
         });
 
-        let display_progress: DisplayProgress = domain_progress.into();
+        let display_progress = Option::<DisplayProgress>::from(&domain_progress)
+            .expect("update should be displayed");
 
         assert_eq!(display_progress.message, "Waiting for asset creation...");
         assert_eq!(display_progress.category, ProgressCategory::Processing);
@@ -218,7 +261,8 @@ mod tests {
             elapsed_secs: 20,
         });
 
-        let display_progress: DisplayProgress = domain_progress.into();
+        let display_progress = Option::<DisplayProgress>::from(&domain_progress)
+            .expect("update should be displayed");
 
         assert_eq!(display_progress.message, "Still waiting... (20s elapsed)");
         assert_eq!(display_progress.category, ProgressCategory::Processing);
@@ -226,16 +270,16 @@ mod tests {
 
     #[test]
     fn test_from_upload_progress_waiting_suppressed() {
-        // 10秒未満の更新は表示を抑制
+        // 10秒未満の更新は表示を抑制（Noneを返す）
         let domain_progress = UploadProgress::new(UploadPhase::WaitingForAsset {
             upload_id: "test_id".to_string(),
             elapsed_secs: 5,
         });
 
-        let display_progress: DisplayProgress = domain_progress.into();
+        let display_progress = Option::<DisplayProgress>::from(&domain_progress);
 
-        assert_eq!(display_progress.message, "");
-        assert_eq!(display_progress.category, ProgressCategory::Processing);
+        // None（表示抑制）が返されることを確認
+        assert!(display_progress.is_none(), "Updates under 10 seconds should be suppressed");
     }
 
     #[test]
@@ -244,7 +288,8 @@ mod tests {
             asset_id: "asset_123".to_string(),
         });
 
-        let display_progress: DisplayProgress = domain_progress.into();
+        let display_progress = Option::<DisplayProgress>::from(&domain_progress)
+            .expect("update should be displayed");
 
         assert_eq!(display_progress.message, "Asset created: asset_123");
         assert_eq!(display_progress.category, ProgressCategory::Completed);
