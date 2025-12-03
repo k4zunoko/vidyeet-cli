@@ -1,4 +1,5 @@
 use crate::commands::{self, CommandResult};
+use crate::commands::result::Mp4Status;
 use crate::domain::progress::{UploadProgress, UploadPhase};
 use anyhow::{Context, Result, bail};
 use std::io::{self, Write};
@@ -43,14 +44,6 @@ pub async fn parse_args(args: &[String]) -> Result<()> {
                 eprintln!("You can find them at: https://dashboard.mux.com/settings/access-tokens");
                 eprintln!();
                 
-                // 既存ログイン時の警告チェック
-                if let Ok(config) = crate::config::user::UserConfig::load() {
-                    if config.has_auth() {
-                        eprintln!("Note: You are already logged in. Entering new credentials will overwrite the existing ones.");
-                        eprintln!();
-                    }
-                }
-                
                 // 対話的に認証情報を取得
                 read_credentials_interactive()
                     .context("Failed to read credentials interactively")?
@@ -92,12 +85,29 @@ pub async fn parse_args(args: &[String]) -> Result<()> {
             });
             
             // 進捗受信ループ（プレゼンテーション層の責務）
-            while let Some(progress) = progress_rx.recv().await {
-                if !machine_output {
-                    // 人間向け進捗表示（stderr）
-                    display_upload_progress(&progress);
+            // タイムアウトを設定して無限待機を防ぐ
+            use tokio::time::{timeout, Duration};
+            let progress_timeout = Duration::from_secs(350); // アップロード最大300秒 + バッファ50秒
+            
+            loop {
+                match timeout(progress_timeout, progress_rx.recv()).await {
+                    Ok(Some(progress)) => {
+                        if !machine_output {
+                            // 人間向け進捗表示（stderr）
+                            display_upload_progress(&progress);
+                        }
+                        // --machine フラグでは進捗メッセージを抑制
+                    }
+                    Ok(None) => {
+                        // チャネルがクローズされた（正常終了）
+                        break;
+                    }
+                    Err(_) => {
+                        // タイムアウト発生
+                        eprintln!("Warning: Progress update timed out");
+                        break;
+                    }
                 }
-                // --machine フラグでは進捗メッセージを抑制
             }
             
             // アップロード完了を待機
@@ -188,7 +198,7 @@ fn read_credentials_from_stdin() -> Result<commands::login::LoginCredentials> {
     let token_id = token_id.trim().to_string();
 
     if token_id.is_empty() {
-        bail!("Token ID cannot be empty.");
+        bail!("Token ID cannot be empty. Please ensure the first line of stdin contains a valid Token ID.");
     }
 
     let mut token_secret = String::new();
@@ -198,7 +208,7 @@ fn read_credentials_from_stdin() -> Result<commands::login::LoginCredentials> {
     let token_secret = token_secret.trim().to_string();
 
     if token_secret.is_empty() {
-        bail!("Token Secret cannot be empty.");
+        bail!("Token Secret cannot be empty. Please ensure the second line of stdin contains a valid Token Secret.");
     }
 
     Ok(commands::login::LoginCredentials {
@@ -324,22 +334,19 @@ fn output_human_readable(result: &CommandResult) -> Result<()> {
                 eprintln!("{}", hls_url);
             }
             
-            // MP4再生URL
+            // MP4再生URL（アプリケーション層で既に生成済み）
             eprintln!("\nMP4 Download URL:");
             if let Some(mp4_url) = &r.mp4_url {
                 eprintln!("{}", mp4_url);
+                
+                // MP4生成中の場合のみ注記を表示
+                if matches!(r.mp4_status, Mp4Status::Generating) {
+                    eprintln!("\nNote: MP4 file is being generated in the background (usually 2-5 minutes).");
+                    eprintln!("The URL above will be available once generation completes.");
+                    eprintln!("You can start streaming with HLS URL immediately!");
+                }
             } else {
-                // MP4生成中の場合、予測URLを表示（playback_idベース）
-                let predicted_url = if let Some(pid) = &r.playback_id {
-                    format!("https://stream.mux.com/{}/highest.mp4", pid)
-                } else {
-                    // playback_idが未取得の場合は予測不能。案内のみ。
-                    String::from("(playback_id not available yet)")
-                };
-                eprintln!("{}", predicted_url);
-                eprintln!("\nNote: MP4 file is being generated in the background (usually 2-5 minutes).");
-                eprintln!("The URL above will be available once generation completes.");
-                eprintln!("You can start streaming with HLS URL immediately!");
+                eprintln!("(not available)");
             }
             
             eprintln!("---");
@@ -405,22 +412,13 @@ fn output_machine_readable(result: &CommandResult) -> Result<()> {
             })
         }
         CommandResult::Upload(r) => {
-            // MP4 URLが取得できない場合、予想URLを生成
-            let mp4_url = r.mp4_url.clone().unwrap_or_else(|| {
-                if let Some(pid) = &r.playback_id {
-                    format!("https://stream.mux.com/{}/highest.mp4", pid)
-                } else {
-                    String::from("")
-                }
-            });
-            
             serde_json::json!({
                 "success": true,
                 "command": "upload",
                 "asset_id": r.asset_id,
                 "playback_id": r.playback_id,
                 "hls_url": r.hls_url,
-                "mp4_url": mp4_url,
+                "mp4_url": r.mp4_url,
                 "mp4_status": r.mp4_status,
                 "file_path": r.file_path,
                 "file_size": r.file_size,

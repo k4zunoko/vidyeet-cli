@@ -32,8 +32,8 @@ async fn run(args: &[String]) -> Result<()> {
 
 /// エラーハンドリングとユーザーへの表示
 ///
-/// anyhow::Error から元のエラー型を downcast して、
-/// エラーの種類に応じた exit code とメッセージを決定する。
+/// エラーチェーンを一度走査して、最初にヒットしたアプリケーション定義エラーから
+/// 終了コードとヒントを取得する。
 fn handle_error(error: anyhow::Error) {
     // エラーメッセージのヘッダー
     eprintln!("Error: {}", error);
@@ -47,59 +47,47 @@ fn handle_error(error: anyhow::Error) {
         }
     }
 
-    // エラーの根本原因を downcast して判定
-    let exit_code = determine_exit_code(&error);
+    // エラーチェーンから終了コードとヒントを同時取得
+    let (exit_code, hint) = extract_error_info(&error);
 
     // ユーザー向けのヒントを表示
-    if let Some(hint) = get_error_hint(&error) {
-        eprintln!("\nHint: {}", hint);
+    if let Some(hint_text) = hint {
+        eprintln!("\nHint: {}", hint_text);
     }
 
     // 適切な終了コードで終了
     std::process::exit(exit_code);
 }
 
-/// エラーチェーンから適切な終了コードを決定
-fn determine_exit_code(error: &anyhow::Error) -> i32 {
-    // エラーチェーン全体を探索
+/// エラーチェーンから終了コードとヒントを一度の走査で抽出
+///
+/// 最初にヒットしたアプリケーション定義エラー（DomainError, ConfigError, InfraError）
+/// から責務の委譲によりseverity() と hint() を取得する。
+/// 型判定の重複を排除し、エラー型側への分類責務の委譲を実現。
+fn extract_error_info(error: &anyhow::Error) -> (i32, Option<String>) {
+    // エラーチェーン全体を一度走査
     for cause in error.chain() {
         // DomainError の場合
         if let Some(domain_err) = cause.downcast_ref::<DomainError>() {
-            return domain_err.severity().exit_code();
-        }
-
-        // InfraError の場合
-        if let Some(infra_err) = cause.downcast_ref::<InfraError>() {
-            return infra_err.severity().exit_code();
+            let severity = domain_err.severity();
+            let hint = domain_err.hint().map(|s| s.to_string());
+            return (severity.exit_code(), hint);
         }
 
         // ConfigError の場合
         if let Some(config_err) = cause.downcast_ref::<ConfigError>() {
-            return config_err.severity().exit_code();
+            let severity = config_err.severity();
+            let hint = config_err.hint().map(|s| s.to_string());
+            return (severity.exit_code(), hint);
+        }
+
+        // InfraError の場合
+        if let Some(infra_err) = cause.downcast_ref::<InfraError>() {
+            let severity = infra_err.severity();
+            return (severity.exit_code(), None);
         }
     }
 
     // 不明なエラーの場合はデフォルトの終了コード
-    1
-}
-
-/// エラーに対するユーザー向けヒントを取得
-fn get_error_hint(error: &anyhow::Error) -> Option<String> {
-    for cause in error.chain() {
-        // DomainError からヒントを取得
-        if let Some(domain_err) = cause.downcast_ref::<DomainError>() {
-            if let Some(hint) = domain_err.hint() {
-                return Some(hint.to_string());
-            }
-        }
-
-        // ConfigError からヒントを取得
-        if let Some(config_err) = cause.downcast_ref::<ConfigError>() {
-            if let Some(hint) = config_err.hint() {
-                return Some(hint.to_string());
-            }
-        }
-    }
-
-    None
+    (1, None)
 }

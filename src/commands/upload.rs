@@ -127,13 +127,22 @@ pub async fn execute(
 
     // 結果を構造化して返す
     let hls_url = asset.get_playback_url();
-    let mp4_url = asset.get_mp4_playback_url();
     let playback_id = asset.data.playback_ids.first().map(|p| p.id.clone());
-    let mp4_status = if mp4_url.is_some() {
+    
+    // MP4 URLを取得: ready状態なら実URLを、それ以外なら予測URLを生成
+    let mp4_url_from_api = asset.get_mp4_playback_url();
+    let mp4_status = if mp4_url_from_api.is_some() {
         Mp4Status::Ready
     } else {
         Mp4Status::Generating
     };
+    
+    // MP4 URLが取得できない場合でも、playback_idがあれば予測URLを生成
+    let mp4_url = mp4_url_from_api.or_else(|| {
+        playback_id.as_ref().map(|pid| {
+            format!("https://stream.mux.com/{}/highest.mp4", pid)
+        })
+    });
 
     Ok(CommandResult::Upload(UploadResult {
         asset_id: asset.data.id,

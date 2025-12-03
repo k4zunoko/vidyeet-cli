@@ -43,9 +43,8 @@ pub async fn execute() -> Result<CommandResult> {
             let hls_url = playback_id.as_ref().map(|id| {
                 format!("https://stream.mux.com/{}.m3u8", id)
             });
-            let mp4_url = playback_id.as_ref().map(|id| {
-                format!("https://stream.mux.com/{}/highest.mp4", id)
-            });
+            // AssetDataのget_mp4_playback_url()を使用して統一的にMP4 URLを取得
+            let mp4_url = asset.get_mp4_playback_url();
 
             VideoInfo {
                 asset_id: asset.id,

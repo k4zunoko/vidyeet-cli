@@ -200,12 +200,29 @@ impl AssetResponse {
     /// static_renditionsから最初のready状態のMP4を探し、
     /// playback_idと組み合わせてMP4のストリーミングURLを返します。
     pub fn get_mp4_playback_url(&self) -> Option<String> {
-        let playback_id = self.data.playback_ids.first()?;
-        let wrapper = self.data.static_renditions.as_ref()?;
-        let rendition = wrapper.files.iter()
-            .find(|r| r.status == "ready" && r.ext == "mp4")?;
+        self.data.get_mp4_playback_url()
+    }
+}
+
+impl AssetData {
+    /// MP4再生URLを構築
+    /// 
+    /// static_renditionsから最初のready状態のMP4を探し、
+    /// playback_idと組み合わせてMP4のストリーミングURLを返します。
+    /// ready状態のMP4がない場合は、playback_idから予測URLを生成します。
+    pub fn get_mp4_playback_url(&self) -> Option<String> {
+        let playback_id = self.playback_ids.first()?;
         
-        Some(format!("https://stream.mux.com/{}/{}", playback_id.id, rendition.name))
+        // ready状態のMP4 renditionを探す
+        if let Some(wrapper) = self.static_renditions.as_ref() {
+            if let Some(rendition) = wrapper.files.iter()
+                .find(|r| r.status == "ready" && r.ext == "mp4") {
+                return Some(format!("https://stream.mux.com/{}/{}", playback_id.id, rendition.name));
+            }
+        }
+        
+        // ready状態のMP4がない場合は予測URLを生成
+        Some(format!("https://stream.mux.com/{}/highest.mp4", playback_id.id))
     }
 }
 
