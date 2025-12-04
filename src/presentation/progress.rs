@@ -5,11 +5,30 @@
 /// 依存しないようにします。
 ///
 /// # 設計方針
-/// - `From<&UploadProgress>`で借用による変換（所有権を奪わない）
+/// - 自前トレイト`ToDisplay`で借用による変換（標準Fromトレイトはオーファンルール違反のため使用不可）
 /// - `Option<DisplayProgress>`で表示抑制を明示的に表現
 /// - ヘルパー関数で各フェーズの変換ロジックを分離（密結合緩和）
 
+use crate::config::{APP_CONFIG, BYTES_PER_MB};
 use crate::domain::progress::{UploadProgress, UploadPhase};
+
+/// ドメイン型からプレゼンテーション表示型への変換トレイト
+///
+/// # 設計意図
+/// 標準ライブラリの`From`トレイトは使用できません（オーファンルール違反）。
+/// `impl From<&UploadProgress> for Option<DisplayProgress>`は、
+/// 外部トレイト（From）を外部型（Option）に実装することになり、
+/// Rustのトレイト孤児規則に違反します。
+///
+/// そのため、自前トレイト`ToDisplay`を定義して変換を実装します。
+pub trait ToDisplay {
+    /// 表示用進捗情報に変換
+    ///
+    /// # 戻り値
+    /// - `Some(DisplayProgress)`: 表示すべき進捗情報
+    /// - `None`: 表示を抑制（例: 10秒未満の経過時間更新）
+    fn to_display(&self) -> Option<DisplayProgress>;
+}
 
 /// 進捗表示のカテゴリ
 ///
@@ -66,12 +85,13 @@ impl DisplayProgress {
 /// - `Option<DisplayProgress>`を返すことで、表示しないケースを明示的に表現
 /// - ヘルパー関数で各フェーズの変換ロジックを分離し、密結合を緩和
 ///
-/// # 戻り値
-/// - `Some(DisplayProgress)`: 表示すべき進捗情報
-/// - `None`: 表示を抑制（例: 10秒未満の経過時間更新）
-impl From<&UploadProgress> for Option<DisplayProgress> {
-    fn from(progress: &UploadProgress) -> Self {
-        match &progress.phase {
+/// # オーファンルール対応
+/// `impl From<&UploadProgress> for Option<DisplayProgress>`は、
+/// 外部トレイト（From）を外部型（Option）に実装するため、
+/// Rustのトレイト孤児規則に違反します。そのため自前トレイトを使用します。
+impl ToDisplay for UploadProgress {
+    fn to_display(&self) -> Option<DisplayProgress> {
+        match &self.phase {
             UploadPhase::ValidatingFile { file_path } => {
                 Some(format_validating_file(file_path))
             }
@@ -115,10 +135,18 @@ fn format_validating_file(file_path: &str) -> DisplayProgress {
     )
 }
 
+/// ファイル検証完了時の進捗表示を生成
 fn format_file_validated(file_name: &str, size_bytes: u64, format: &str) -> DisplayProgress {
-    let size_mb = size_bytes as f64 / 1_048_576.0;
+    let size_mb = size_bytes as f64 / BYTES_PER_MB;
+    let precision = APP_CONFIG.presentation.size_display_precision;
     DisplayProgress::new(
-        format!("File validated: {} ({:.2} MB, {})", file_name, size_mb, format),
+        format!(
+            "File validated: {} ({:.prec$} MB, {})",
+            file_name,
+            size_mb,
+            format,
+            prec = precision
+        ),
         ProgressCategory::Validation,
     )
 }
@@ -137,39 +165,55 @@ fn format_upload_created(upload_id: &str) -> DisplayProgress {
     )
 }
 
+/// アップロード開始時の進捗表示を生成
 fn format_uploading_file(file_name: &str, size_bytes: u64) -> DisplayProgress {
-    let size_mb = size_bytes as f64 / 1_048_576.0;
+    let size_mb = size_bytes as f64 / BYTES_PER_MB;
+    let precision = APP_CONFIG.presentation.size_display_precision;
     DisplayProgress::new(
-        format!("Uploading file: {} ({:.2} MB)...", file_name, size_mb),
+        format!(
+            "Uploading file: {} ({:.prec$} MB)...",
+            file_name,
+            size_mb,
+            prec = precision
+        ),
         ProgressCategory::Upload,
     )
 }
 
+/// アップロード完了時の進捗表示を生成
 fn format_file_uploaded(file_name: &str, size_bytes: u64) -> DisplayProgress {
-    let size_mb = size_bytes as f64 / 1_048_576.0;
+    let size_mb = size_bytes as f64 / BYTES_PER_MB;
+    let precision = APP_CONFIG.presentation.size_display_precision;
     DisplayProgress::new(
-        format!("File uploaded: {} ({:.2} MB)", file_name, size_mb),
+        format!(
+            "File uploaded: {} ({:.prec$} MB)",
+            file_name,
+            size_mb,
+            prec = precision
+        ),
         ProgressCategory::Upload,
     )
 }
 
 /// アセット待機中の進捗表示
 /// 
-/// 10秒ごとにのみ更新を表示し、それ以外は`None`を返すことで
-/// 過度な更新を抑制します。
+/// 設定された間隔（progress_update_interval_secs）ごとにのみ更新を表示し、
+/// それ以外は`None`を返すことで過度な更新を抑制します。
 fn format_waiting_for_asset(elapsed_secs: u64) -> Option<DisplayProgress> {
+    let update_interval = APP_CONFIG.presentation.progress_update_interval_secs;
+    
     if elapsed_secs == 0 {
         Some(DisplayProgress::new(
             "Waiting for asset creation...".to_string(),
             ProgressCategory::Processing,
         ))
-    } else if elapsed_secs % 10 == 0 {
+    } else if elapsed_secs % update_interval == 0 {
         Some(DisplayProgress::new(
             format!("Still waiting... ({}s elapsed)", elapsed_secs),
             ProgressCategory::Processing,
         ))
     } else {
-        // 10秒未満の更新は表示しない（明示的にNoneを返す）
+        // 設定間隔未満の更新は表示しない（明示的にNoneを返す）
         None
     }
 }
@@ -214,7 +258,7 @@ mod tests {
             file_path: "/path/to/file.mp4".to_string(),
         });
 
-        let display_progress = Option::<DisplayProgress>::from(&domain_progress)
+        let display_progress = domain_progress.to_display()
             .expect("update should be displayed");
 
         assert_eq!(
@@ -232,7 +276,7 @@ mod tests {
             format: "mp4".to_string(),
         });
 
-        let display_progress = Option::<DisplayProgress>::from(&domain_progress)
+        let display_progress = domain_progress.to_display()
             .expect("update should be displayed");
 
         assert!(display_progress.message.contains("video.mp4"));
@@ -247,7 +291,7 @@ mod tests {
             elapsed_secs: 0,
         });
 
-        let display_progress = Option::<DisplayProgress>::from(&domain_progress)
+        let display_progress = domain_progress.to_display()
             .expect("update should be displayed");
 
         assert_eq!(display_progress.message, "Waiting for asset creation...");
@@ -261,7 +305,7 @@ mod tests {
             elapsed_secs: 20,
         });
 
-        let display_progress = Option::<DisplayProgress>::from(&domain_progress)
+        let display_progress = domain_progress.to_display()
             .expect("update should be displayed");
 
         assert_eq!(display_progress.message, "Still waiting... (20s elapsed)");
@@ -270,16 +314,16 @@ mod tests {
 
     #[test]
     fn test_from_upload_progress_waiting_suppressed() {
-        // 10秒未満の更新は表示を抑制（Noneを返す）
+        // 設定間隔未満の更新は表示を抑制（Noneを返す）
         let domain_progress = UploadProgress::new(UploadPhase::WaitingForAsset {
             upload_id: "test_id".to_string(),
             elapsed_secs: 5,
         });
 
-        let display_progress = Option::<DisplayProgress>::from(&domain_progress);
+        let display_progress = domain_progress.to_display();
 
         // None（表示抑制）が返されることを確認
-        assert!(display_progress.is_none(), "Updates under 10 seconds should be suppressed");
+        assert!(display_progress.is_none(), "Updates under configured interval should be suppressed");
     }
 
     #[test]
@@ -288,7 +332,7 @@ mod tests {
             asset_id: "asset_123".to_string(),
         });
 
-        let display_progress = Option::<DisplayProgress>::from(&domain_progress)
+        let display_progress = domain_progress.to_display()
             .expect("update should be displayed");
 
         assert_eq!(display_progress.message, "Asset created: asset_123");

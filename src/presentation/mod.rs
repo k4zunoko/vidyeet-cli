@@ -10,3 +10,6 @@
 
 pub mod output;
 pub mod progress;
+
+// 主要な型とトレイトを再エクスポート
+pub use progress::{DisplayProgress, ToDisplay, ProgressCategory};

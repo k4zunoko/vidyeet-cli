@@ -8,6 +8,18 @@
 pub struct AppConfig {
     pub api: ApiConfig,
     pub upload: UploadConfig,
+    pub presentation: PresentationConfig,
+}
+
+/// プレゼンテーション層の設定
+#[derive(Debug, Clone, Copy)]
+pub struct PresentationConfig {
+    /// ファイルサイズ表示の精度（小数点以下の桁数）
+    pub size_display_precision: usize,
+
+    /// 進捗更新の表示間隔(秒)
+    /// WaitingForAsset フェーズでの更新頻度を制御
+    pub progress_update_interval_secs: u64,
 }
 
 /// API関連の設定
@@ -34,6 +46,10 @@ pub struct UploadConfig {
 
     /// アップロード待機の最大時間(秒)
     pub max_wait_secs: u64,
+
+    /// 進捗チャネルの受信タイムアウト(秒)
+    /// アップロード処理全体のタイムアウト(max_wait_secs)にバッファを追加
+    pub progress_timeout_secs: u64,
 }
 
 impl AppConfig {
@@ -49,6 +65,11 @@ impl AppConfig {
                 supported_formats: &["mp4", "mov", "avi", "wmv", "flv", "mkv", "webm"],
                 poll_interval_secs: 2,
                 max_wait_secs: 300,
+                progress_timeout_secs: 350, // max_wait_secs + 50秒バッファ
+            },
+            presentation: PresentationConfig {
+                size_display_precision: 2, // 「10.00 MB」形式
+                progress_update_interval_secs: 10, // 10秒ごとに更新
             },
         }
     }
@@ -58,6 +79,13 @@ impl AppConfig {
 ///
 /// コンパイル時に評価され、実行時のコストはゼロです。
 pub const APP_CONFIG: AppConfig = AppConfig::new();
+
+// ============================================================================
+// 単位変換定数
+// ============================================================================
+
+/// 1メガバイトのバイト数
+pub const BYTES_PER_MB: f64 = 1_048_576.0;
 
 impl UploadConfig {
     /// 拡張子からContent-Typeを取得

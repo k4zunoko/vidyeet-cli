@@ -148,8 +148,10 @@ fn output_human_readable(result: &CommandResult) -> Result<()> {
 
             // 削除した動画がある場合
             if r.deleted_old_videos > 0 {
-                eprintln!("\nNote: Deleted {} old video(s) to stay within the 10-video limit.", 
-                    r.deleted_old_videos);
+                eprintln!(
+                    "\nNote: Deleted {} old video(s) because the video limit for your plan was reached.",
+                    r.deleted_old_videos
+                );
             }
         }
         CommandResult::Help => {

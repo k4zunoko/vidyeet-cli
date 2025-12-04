@@ -1,6 +1,7 @@
 use crate::commands;
+use crate::config::APP_CONFIG;
 use crate::domain::progress::UploadProgress;
-use crate::presentation::progress::DisplayProgress;
+use crate::presentation::progress::{DisplayProgress, ToDisplay};
 use crate::presentation::output;
 use anyhow::{Context, Result, bail};
 use std::io::{self, Write};
@@ -32,22 +33,9 @@ pub async fn parse_args(args: &[String]) -> Result<()> {
             let use_stdin = args.get(command_start_index + 1).map(|s| s.as_str()) == Some("--stdin");
             
             let credentials = if use_stdin {
-                // stdin からパイプで認証情報を取得
-                read_credentials_from_stdin()
-                    .context("Failed to read credentials from stdin")?
+                read_credentials_from_stdin()?
             } else {
-                // 対話的入力の場合
-                
-                // 案内メッセージを表示（プレゼンテーション層の責務）
-                eprintln!("Logging in to Mux Video...");
-                eprintln!();
-                eprintln!("Please enter your Mux Access Token credentials.");
-                eprintln!("You can find them at: https://dashboard.mux.com/settings/access-tokens");
-                eprintln!();
-                
-                // 対話的に認証情報を取得
-                read_credentials_interactive()
-                    .context("Failed to read credentials interactively")?
+                read_credentials_interactive()?
             };
             
             commands::login::execute(credentials)
@@ -72,8 +60,12 @@ pub async fn parse_args(args: &[String]) -> Result<()> {
         "upload" => {
             let file_path = args
                 .get(command_start_index + 1)
-                .context("Please specify a file path for upload command")?;
-            
+                .context("Please specify a file path for upload command")?
+                .trim();  // 先頭・末尾の空白削除
+
+            if file_path.is_empty() {
+                bail!("File path cannot be empty");
+            }
             // 進捗通知チャネルを作成
             let (progress_tx, mut progress_rx) = tokio::sync::mpsc::channel::<UploadProgress>(32);
             
@@ -88,7 +80,7 @@ pub async fn parse_args(args: &[String]) -> Result<()> {
             // 進捗受信ループ（プレゼンテーション層の責務）
             // タイムアウトを設定して無限待機を防ぐ
             use tokio::time::{timeout, Duration};
-            let progress_timeout = Duration::from_secs(350); // アップロード最大300秒 + バッファ50秒
+            let progress_timeout = Duration::from_secs(APP_CONFIG.upload.progress_timeout_secs);
             
             loop {
                 match timeout(progress_timeout, progress_rx.recv()).await {
@@ -96,7 +88,7 @@ pub async fn parse_args(args: &[String]) -> Result<()> {
                         if !machine_output {
                             // ドメイン層の型をプレゼンテーション層の型に変換（借用）
                             // Option<DisplayProgress>を返すため、表示が必要な場合のみ出力
-                            if let Some(display_progress) = Option::<DisplayProgress>::from(&progress) {
+                            if let Some(display_progress) = progress.to_display() {
                                 // 人間向け進捗表示（stderr）
                                 display_upload_progress(&display_progress);
                             }
@@ -159,6 +151,11 @@ fn print_usage() {
 /// 
 /// プレゼンテーション層の責務として、ユーザー入力を取得し検証する
 fn read_credentials_interactive() -> Result<commands::login::LoginCredentials> {
+    eprintln!("Logging in to Mux Video...");
+    eprintln!();
+    eprintln!("Please enter your Mux Access Token credentials.");
+    eprintln!("You can find them at: https://dashboard.mux.com/settings/access-tokens");
+    eprintln!();
     // Token IDの取得
     eprint!("Access Token ID: ");
     io::stdout().flush()?;

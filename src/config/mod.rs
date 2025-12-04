@@ -22,7 +22,7 @@ pub mod error;
 pub mod permissions;
 pub mod user;
 
-pub use app::APP_CONFIG;
+pub use app::{APP_CONFIG, BYTES_PER_MB};
 pub use user::UserConfig;
 
 #[cfg(test)]
