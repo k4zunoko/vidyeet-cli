@@ -7,22 +7,29 @@
 use crate::commands::result::{CommandResult, Mp4Status};
 use anyhow::Result;
 
+/// ヘルプテキスト（単一の情報源）
+const HELP_TEXT: &str = "Mux Video CLI
+Upload videos to Mux Video easily from the command line
+
+Usage:
+  vidyeet [--machine] <command> [args...]
+
+Global Flags:
+  --machine        - Output machine-readable JSON to stdout (for scripting)
+
+Available commands:
+  login            - Login to Mux Video (credentials entered interactively)
+  logout           - Logout from Mux Video
+  status           - Check authentication status
+  list             - List all uploaded videos
+  upload <file>    - Upload a video to Mux Video
+  help             - Display this help message";
+
 /// コマンド使用方法を表示する
 ///
 /// CLI引数が不正な場合や、ヘルプが必要な場合に呼び出されます。
 pub fn print_usage() {
-    eprintln!("Usage: vidyeet [--machine] <command> [args...]");
-    eprintln!();
-    eprintln!("Global Flags:");
-    eprintln!("  --machine        - Output machine-readable JSON to stdout (for scripting)");
-    eprintln!();
-    eprintln!("Available commands:");
-    eprintln!("  login            - Login to Mux Video (credentials entered interactively)");
-    eprintln!("  logout           - Logout from Mux Video");
-    eprintln!("  status           - Check authentication status");
-    eprintln!("  list             - List all uploaded videos");
-    eprintln!("  upload <file>    - Upload a video to Mux Video");
-    eprintln!("  help             - Display this help message");
+    eprintln!("{}", HELP_TEXT);
 }
 
 /// コマンド結果を適切な形式で出力する
@@ -174,19 +181,7 @@ fn output_human_readable(result: &CommandResult) -> Result<()> {
             }
         }
         CommandResult::Help => {
-            eprintln!("Mux Video CLI");
-            eprintln!("Upload videos to Mux Video easily from the command line");
-            eprintln!();
-            eprintln!("Usage:");
-            eprintln!("  vidyeet <command> [args...]");
-            eprintln!();
-            eprintln!("Commands:");
-            eprintln!("  login          - Login to Mux Video");
-            eprintln!("  logout         - Logout from Mux Video");
-            eprintln!("  status         - Check authentication status");
-            eprintln!("  list           - List all uploaded videos");
-            eprintln!("  upload <file>  - Upload a video file");
-            eprintln!("  help           - Display this help message");
+            eprintln!("{}", HELP_TEXT);
         }
     }
 
