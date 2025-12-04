@@ -8,9 +8,11 @@
 /// - 自前トレイト`ToDisplay`で借用による変換（標準Fromトレイトはオーファンルール違反のため使用不可）
 /// - `Option<DisplayProgress>`で表示抑制を明示的に表現
 /// - ヘルパー関数で各フェーズの変換ロジックを分離（密結合緩和）
+/// - 進捗受信ループの処理もこのモジュールで管理（プレゼンテーション層の責務）
 
 use crate::config::{APP_CONFIG, BYTES_PER_MB};
 use crate::domain::progress::{UploadProgress, UploadPhase};
+use anyhow::Result;
 
 /// ドメイン型からプレゼンテーション表示型への変換トレイト
 ///
@@ -52,6 +54,7 @@ pub enum ProgressCategory {
 /// ドメイン層の`UploadProgress`から生成され、
 /// UI表示に必要な情報のみを保持します。
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct DisplayProgress {
     /// 表示用メッセージ
     pub message: String,
@@ -72,10 +75,70 @@ impl DisplayProgress {
     }
 
     /// 詳細情報を追加
+    #[allow(dead_code)]
     pub fn with_details(mut self, details: String) -> Self {
         self.details = Some(details);
         self
     }
+}
+
+/// アップロード進捗を人間向けに表示（stderr）
+///
+/// プレゼンテーション層の責務として、DisplayProgressを受け取り、
+/// ユーザーフレンドリーなメッセージを表示します。
+/// ドメイン層の実装詳細（UploadPhase）には依存しません。
+pub fn display_upload_progress(progress: &DisplayProgress) {
+    // Option<DisplayProgress>により表示すべき進捗のみ渡されるため、
+    // 空文字チェック不要（呼び出し側でif let Some()によりフィルタ済み）
+    eprintln!("{}", progress.message);
+}
+
+/// アップロード進捗を受信して表示するループ処理
+///
+/// プレゼンテーション層の責務として、進捗チャネルから受信した
+/// ドメイン層の進捗情報を表示用に変換し、ユーザーに表示します。
+///
+/// # 引数
+/// * `progress_rx` - 進捗受信チャネル
+/// * `machine_output` - 機械可読出力フラグ（true時は進捗表示を抑制）
+///
+/// # 戻り値
+/// 処理が正常に完了した場合は`Ok(())`、タイムアウトした場合は警告を出力
+pub async fn handle_upload_progress(
+    mut progress_rx: tokio::sync::mpsc::Receiver<UploadProgress>,
+    machine_output: bool,
+) -> Result<()> {
+    // タイムアウトを設定して無限待機を防ぐ
+    use tokio::time::{timeout, Duration};
+    let progress_timeout = Duration::from_secs(APP_CONFIG.upload.progress_timeout_secs);
+    
+    loop {
+        match timeout(progress_timeout, progress_rx.recv()).await {
+            Ok(Some(progress)) => {
+                if !machine_output {
+                    // ドメイン層の型をプレゼンテーション層の型に変換（借用）
+                    // Option<DisplayProgress>を返すため、表示が必要な場合のみ出力
+                    if let Some(display_progress) = progress.to_display() {
+                        // 人間向け進捗表示（stderr）
+                        display_upload_progress(&display_progress);
+                    }
+                    // Noneの場合は表示を抑制（10秒未満の経過時間更新など）
+                }
+                // --machine フラグでは進捗メッセージを抑制
+            }
+            Ok(std::option::Option::None) => {
+                // チャネルがクローズされた（正常終了）
+                break;
+            }
+            Err(_) => {
+                // タイムアウト発生
+                eprintln!("Warning: Progress update timed out");
+                break;
+            }
+        }
+    }
+    
+    Ok(())
 }
 
 /// ドメイン層の`UploadProgress`からプレゼンテーション層の`DisplayProgress`への変換

@@ -2,9 +2,28 @@
 ///
 /// コマンド実行結果をユーザー向け（人間可読）または
 /// 機械向け（JSON）形式で出力する責務を担います。
+/// CLI使用方法の表示もこのモジュールが担当します。
 
 use crate::commands::result::{CommandResult, Mp4Status};
 use anyhow::Result;
+
+/// コマンド使用方法を表示する
+///
+/// CLI引数が不正な場合や、ヘルプが必要な場合に呼び出されます。
+pub fn print_usage() {
+    eprintln!("Usage: vidyeet [--machine] <command> [args...]");
+    eprintln!();
+    eprintln!("Global Flags:");
+    eprintln!("  --machine        - Output machine-readable JSON to stdout (for scripting)");
+    eprintln!();
+    eprintln!("Available commands:");
+    eprintln!("  login            - Login to Mux Video (credentials entered interactively)");
+    eprintln!("  logout           - Logout from Mux Video");
+    eprintln!("  status           - Check authentication status");
+    eprintln!("  list             - List all uploaded videos");
+    eprintln!("  upload <file>    - Upload a video to Mux Video");
+    eprintln!("  help             - Display this help message");
+}
 
 /// コマンド結果を適切な形式で出力する
 /// 
