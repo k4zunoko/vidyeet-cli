@@ -333,7 +333,8 @@ mod tests {
         };
 
         let mp4_url = response_without_mp4.get_mp4_playback_url();
-        assert!(mp4_url.is_none());
+        assert!(mp4_url.is_some());
+        assert_eq!(mp4_url.unwrap(), "https://stream.mux.com/playback_def/highest.mp4");
     }
 
     #[test]

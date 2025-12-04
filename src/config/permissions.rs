@@ -15,8 +15,20 @@ use std::path::Path;
 /// * `file_path` - パーミッションを設定するファイルパス
 ///
 /// # Errors
+/// ファイルが存在しない場合、または
 /// パーミッション設定に失敗した場合に ConfigError を返します。
 pub fn set_token_file_permissions(file_path: &Path) -> Result<(), ConfigError> {
+    // ファイルが存在するか確認
+    if !file_path.exists() {
+        return Err(ConfigError::FileSystem {
+            context: format!("Config file not found: {}", file_path.display()),
+            source: std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "File does not exist",
+            ),
+        });
+    }
+
     #[cfg(unix)]
     {
         set_unix_permissions(file_path)

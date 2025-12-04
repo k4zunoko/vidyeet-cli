@@ -8,7 +8,7 @@ use crate::commands::result::{CommandResult, Mp4Status};
 use anyhow::Result;
 
 /// ヘルプテキスト（単一の情報源）
-const HELP_TEXT: &str = "Mux Video CLI
+const HELP_TEXT: &str = "vidyeet-CLI
 Upload videos to Mux Video easily from the command line
 
 Usage:
