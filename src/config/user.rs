@@ -7,7 +7,6 @@
 ///
 /// 初回起動時にデフォルト値から自動的にconfig.tomlを作成します。
 use crate::config::error::ConfigError;
-use crate::config::permissions;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -163,10 +162,9 @@ timezone_offset_seconds = {}
     /// ユーザー設定を保存する
     ///
     /// 必要に応じて設定ディレクトリを作成します。
-    /// 保存後、ファイルパーミッションを設定します（トークン情報保護）。
     ///
     /// # Errors
-    /// ディレクトリの作成、ファイルの書き込み、またはパーミッション設定に失敗した場合に ConfigError を返します。
+    /// ディレクトリの作成またはファイルの書き込みに失敗した場合に ConfigError を返します。
     pub fn save(&self) -> Result<(), ConfigError> {
         let config_path = Self::config_path()?;
 
@@ -187,9 +185,6 @@ timezone_offset_seconds = {}
             context: format!("Failed to write config file: {}", config_path.display()),
             source: e,
         })?;
-
-        // ファイルパーミッションを設定（プラットフォーム固有）
-        permissions::set_token_file_permissions(&config_path)?;
 
         Ok(())
     }

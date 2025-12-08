@@ -19,7 +19,6 @@
 /// ```
 pub mod app;
 pub mod error;
-pub mod permissions;
 pub mod user;
 
 pub use app::{APP_CONFIG, BYTES_PER_MB};
