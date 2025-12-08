@@ -100,8 +100,8 @@ pub async fn execute(
         size_bytes: validation.size,
     }).await;
 
-    // ファイルをアップロード
-    upload_file(&client, upload_url, file_path).await
+    // ファイルをチャンクアップロード
+    upload_file_chunked(&client, upload_url, file_path, validation.size, progress_tx.clone()).await
         .context("Failed to upload file")?;
 
     // ファイルアップロード完了
@@ -110,13 +110,8 @@ pub async fn execute(
         size_bytes: validation.size,
     }).await;
 
-    // アセット作成完了待機開始
-    notify(UploadPhase::WaitingForAsset {
-        upload_id: upload.data.id.clone(),
-        elapsed_secs: 0,
-    }).await;
-
     // アップロードとアセット作成の完了を待機
+    // wait_for_upload_completion内で初回のWaitingForAssetメッセージを送信
     let asset = wait_for_upload_completion(&client, &auth_manager, &upload.data.id, progress_tx.clone()).await
         .context("Failed to wait for upload completion")?;
 
@@ -284,7 +279,8 @@ async fn delete_oldest_assets(
     Ok(deleted)
 }
 
-/// ファイルをDirect Upload URLにアップロード
+/// ファイルをDirect Upload URLにアップロード（従来の一括アップロード、未使用）
+#[allow(dead_code)]
 async fn upload_file(
     client: &ApiClient,
     upload_url: &str,
@@ -313,6 +309,182 @@ async fn upload_file(
     Ok(())
 }
 
+/// ファイルをチャンク分割してDirect Upload URLにアップロード
+///
+/// Mux Direct Uploadの推奨方式（UpChunk互換）で、大きなファイルを
+/// 256KiBの倍数のチャンクに分割してアップロードします。
+///
+/// # 設計
+/// - チャンクサイズ: 32MB（APP_CONFIG.upload.chunk_size）
+/// - Content-Rangeヘッダー: `bytes {start}-{end}/{total}`
+/// - 進捗通知: チャンク完了ごとに UploadingChunk イベントを送信
+/// - リトライ: 指数バックオフで最大3回
+/// - レスポンス: 308（継続）、200/201（完了）
+///
+/// # 引数
+/// * `client` - APIクライアント
+/// * `upload_url` - Direct Upload URL
+/// * `file_path` - アップロード対象ファイルのパス
+/// * `total_size` - ファイルの総サイズ（バイト）
+/// * `progress_tx` - 進捗通知チャネル
+async fn upload_file_chunked(
+    client: &ApiClient,
+    upload_url: &str,
+    file_path: &str,
+    total_size: u64,
+    progress_tx: Option<tokio::sync::mpsc::Sender<UploadProgress>>,
+) -> Result<()> {
+    use tokio::io::AsyncReadExt;
+    
+    let chunk_size = APP_CONFIG.upload.chunk_size;
+    let total_chunks = ((total_size as f64) / (chunk_size as f64)).ceil() as usize;
+    
+    // ファイルを開く
+    let mut file = tokio::fs::File::open(file_path)
+        .await
+        .context("Failed to open file for chunked upload")?;
+    
+    // Content-Typeを推定
+    let content_type = std::path::Path::new(file_path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|ext| APP_CONFIG.upload.get_content_type(ext))
+        .unwrap_or("application/octet-stream");
+    
+    let mut bytes_sent: u64 = 0;
+    let mut current_chunk = 0;
+    
+    loop {
+        current_chunk += 1;
+        
+        // チャンクサイズ分のバッファを用意（最終チャンクは残りサイズ）
+        let remaining = total_size - bytes_sent;
+        let this_chunk_size = if remaining < chunk_size as u64 {
+            remaining as usize
+        } else {
+            chunk_size
+        };
+        
+        if this_chunk_size == 0 {
+            break; // 全て送信完了
+        }
+        
+        // チャンクを読み込み
+        let mut chunk_buffer = vec![0u8; this_chunk_size];
+        file.read_exact(&mut chunk_buffer)
+            .await
+            .context("Failed to read chunk from file")?;
+        
+        // Content-Rangeヘッダーを構築
+        let byte_start = bytes_sent;
+        let byte_end = bytes_sent + this_chunk_size as u64 - 1;
+        let content_range = format!("bytes {}-{}/{}", byte_start, byte_end, total_size);
+        
+        // チャンクをアップロード（リトライ付き）
+        upload_chunk_with_retry(
+            client,
+            upload_url,
+            chunk_buffer,
+            &content_range,
+            content_type,
+        ).await?;
+        
+        bytes_sent += this_chunk_size as u64;
+        
+        // 進捗通知
+        if let Some(ref tx) = progress_tx {
+            let _ = tx.send(UploadProgress::new(UploadPhase::UploadingChunk {
+                current_chunk,
+                total_chunks,
+                bytes_sent,
+                total_bytes: total_size,
+            })).await;
+        }
+    }
+    
+    Ok(())
+}
+
+/// チャンクを指数バックオフでリトライしながらアップロード
+///
+/// # 引数
+/// * `client` - APIクライアント
+/// * `upload_url` - Direct Upload URL
+/// * `chunk_data` - チャンクのバイトデータ
+/// * `content_range` - Content-Rangeヘッダー値
+/// * `content_type` - Content-Type
+async fn upload_chunk_with_retry(
+    client: &ApiClient,
+    upload_url: &str,
+    chunk_data: Vec<u8>,
+    content_range: &str,
+    content_type: &str,
+) -> Result<()> {
+    let max_retries = APP_CONFIG.upload.max_retries;
+    let backoff_base_ms = APP_CONFIG.upload.backoff_base_ms;
+    
+    for attempt in 0..max_retries {
+        match upload_chunk(client, upload_url, &chunk_data, content_range, content_type).await {
+            Ok(_) => return Ok(()),
+            Err(e) if attempt < max_retries - 1 => {
+                // 指数バックオフ: 1秒、2秒、4秒...
+                let backoff_ms = backoff_base_ms * (2_u64.pow(attempt));
+                eprintln!("Chunk upload failed (attempt {}/{}), retrying in {}ms: {}", 
+                    attempt + 1, max_retries, backoff_ms, e);
+                tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
+            }
+            Err(e) => {
+                return Err(e).context(format!(
+                    "Chunk upload failed after {} attempts", max_retries
+                ));
+            }
+        }
+    }
+    
+    bail!("Chunk upload failed after {} retries", max_retries)
+}
+
+/// 単一チャンクをアップロード
+///
+/// # レスポンスコード
+/// - 308: Resume Incomplete（継続中）
+/// - 200/201: Success（完了）
+async fn upload_chunk(
+    _client: &ApiClient,
+    upload_url: &str,
+    chunk_data: &[u8],
+    content_range: &str,
+    content_type: &str,
+) -> Result<()> {
+    // reqwestクライアントを直接使用してContent-Rangeヘッダーを設定
+    let reqwest_client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(APP_CONFIG.api.timeout_seconds))
+        .build()
+        .context("Failed to build reqwest client")?;
+    
+    let response = reqwest_client
+        .put(upload_url)
+        .header("Content-Type", content_type)
+        .header("Content-Length", chunk_data.len().to_string())
+        .header("Content-Range", content_range)
+        .body(chunk_data.to_vec())
+        .send()
+        .await
+        .context("Failed to send chunk PUT request")?;
+    
+    let status = response.status();
+    
+    // 308 (Resume Incomplete) または 2xx (Success) なら成功
+    if status == reqwest::StatusCode::from_u16(308).unwrap() 
+        || status.is_success() {
+        return Ok(());
+    }
+    
+    // エラーレスポンス
+    let error_body = response.text().await.unwrap_or_else(|_| "No error body".to_string());
+    bail!("Chunk upload failed with status {}: {}", status, error_body)
+}
+
 /// アップロードとアセット作成の完了を待機
 ///
 /// Direct Uploadのステータスをポーリングし、`asset_created`状態になるまで待機します。
@@ -334,16 +506,15 @@ async fn wait_for_upload_completion(
     let max_iterations = APP_CONFIG.upload.max_wait_secs / APP_CONFIG.upload.poll_interval_secs;
     let start_time = std::time::Instant::now();
 
-    for _i in 0..max_iterations {
-        // 経過時間を進捗通知
-        if let Some(ref tx) = progress_tx {
-            let elapsed = start_time.elapsed().as_secs();
-            let _ = tx.send(UploadProgress::new(UploadPhase::WaitingForAsset {
-                upload_id: upload_id.to_string(),
-                elapsed_secs: elapsed,
-            })).await;
-        }
+    // 初回の待機メッセージを送信
+    if let Some(ref tx) = progress_tx {
+        let _ = tx.send(UploadProgress::new(UploadPhase::WaitingForAsset {
+            upload_id: upload_id.to_string(),
+            elapsed_secs: 0,
+        })).await;
+    }
 
+    for _i in 0..max_iterations {
         // Upload情報を取得
         let response = client
             .get(
@@ -387,8 +558,17 @@ async fn wait_for_upload_completion(
                 bail!("Upload timed out");
             }
             _ => {
-                // まだ処理中 - 待機
+                // まだ処理中 - 待機してから次の進捗通知
                 sleep(Duration::from_secs(APP_CONFIG.upload.poll_interval_secs)).await;
+                
+                // sleep後に経過時間を進捗通知
+                if let Some(ref tx) = progress_tx {
+                    let elapsed = start_time.elapsed().as_secs();
+                    let _ = tx.send(UploadProgress::new(UploadPhase::WaitingForAsset {
+                        upload_id: upload_id.to_string(),
+                        elapsed_secs: elapsed,
+                    })).await;
+                }
             }
         }
     }

@@ -64,6 +64,10 @@ pub async fn parse_args(args: &[String]) -> Result<()> {
             if file_path.is_empty() {
                 bail!("File path cannot be empty");
             }
+            
+            // --progress フラグをチェック
+            let show_progress = args.get(command_start_index + 2).map(|s| s.as_str()) == Some("--progress");
+            
             // 進捗通知チャネルを作成
             let (progress_tx, progress_rx) = tokio::sync::mpsc::channel(32);
             
@@ -77,7 +81,7 @@ pub async fn parse_args(args: &[String]) -> Result<()> {
             
             // 進捗受信ループ（プレゼンテーション層に委譲）
             let progress_handle = tokio::spawn(async move {
-                progress::handle_upload_progress(progress_rx, machine_output).await
+                progress::handle_upload_progress(progress_rx, machine_output, show_progress).await
             });
             
             // 両方のタスクの完了を待機

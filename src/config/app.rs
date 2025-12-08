@@ -50,6 +50,16 @@ pub struct UploadConfig {
     /// 進捗チャネルの受信タイムアウト(秒)
     /// アップロード処理全体のタイムアウト(max_wait_secs)にバッファを追加
     pub progress_timeout_secs: u64,
+
+    /// チャンクアップロードのチャンクサイズ (バイト)
+    /// 256KiBの倍数である必要がある（Mux/UpChunk推奨）
+    pub chunk_size: usize,
+
+    /// チャンクアップロード失敗時の最大リトライ回数
+    pub max_retries: u32,
+
+    /// リトライ時の指数バックオフ基準時間 (ミリ秒)
+    pub backoff_base_ms: u64,
 }
 
 impl AppConfig {
@@ -66,6 +76,9 @@ impl AppConfig {
                 poll_interval_secs: 2,
                 max_wait_secs: 300,
                 progress_timeout_secs: 350, // max_wait_secs + 50秒バッファ
+                chunk_size: 16_777_216, // 16MB (256KiB * 64)　[16_777_216=16MB, 33_554_432=32MB]
+                max_retries: 3,
+                backoff_base_ms: 1000, // 1秒
             },
             presentation: PresentationConfig {
                 size_display_precision: 2, // 「10.00 MB」形式

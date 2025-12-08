@@ -4,6 +4,7 @@
 /// プレゼンテーション層はこれらのイベントを受け取り、
 /// 人間向けの進捗表示や機械向けの制御に使用します。
 use std::time::SystemTime;
+use serde::Serialize;
 
 /// アップロード処理の各段階を表すイベント
 ///
@@ -11,7 +12,9 @@ use std::time::SystemTime;
 /// - ビジネスロジック（処理フロー）の可視化
 /// - プレゼンテーション層での柔軟な出力制御
 /// - 将来のプログレスバー実装への拡張性
-#[derive(Debug, Clone)]
+/// - 機械可読出力のためにSerialize可能
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "phase", rename_all = "snake_case")]
 pub enum UploadPhase {
     /// ファイル検証開始
     ValidatingFile {
@@ -41,6 +44,14 @@ pub enum UploadPhase {
         size_bytes: u64,
     },
 
+    /// チャンクアップロード中
+    UploadingChunk {
+        current_chunk: usize,
+        total_chunks: usize,
+        bytes_sent: u64,
+        total_bytes: u64,
+    },
+
     /// ファイルアップロード完了
     FileUploaded {
         file_name: String,
@@ -63,11 +74,12 @@ pub enum UploadPhase {
 /// アップロード進捗情報
 ///
 /// 各処理段階のイベントとタイムスタンプを保持します。
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct UploadProgress {
     /// 処理段階
     pub phase: UploadPhase,
     /// イベント発生時刻（将来の分析や詳細ログ用に保持）
+    #[serde(skip)]
     #[allow(dead_code)]
     pub timestamp: SystemTime,
 }

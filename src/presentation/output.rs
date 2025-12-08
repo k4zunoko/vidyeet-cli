@@ -22,8 +22,14 @@ Available commands:
   logout           - Logout from Mux Video
   status           - Check authentication status
   list             - List all uploaded videos
-  upload <file>    - Upload a video to Mux Video
-  help             - Display this help message";
+  upload <file> [--progress]
+                   - Upload a video to Mux Video
+                     --progress: Show upload progress (required for progress output)
+  help             - Display this help message
+
+Progress Output:
+  upload --progress              - Show human-readable progress to stderr
+  --machine upload --progress    - Output machine-readable JSON progress to stdout";
 
 /// コマンド使用方法を表示する
 ///

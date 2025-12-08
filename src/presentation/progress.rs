@@ -100,13 +100,15 @@ pub fn display_upload_progress(progress: &DisplayProgress) {
 ///
 /// # 引数
 /// * `progress_rx` - 進捗受信チャネル
-/// * `machine_output` - 機械可読出力フラグ（true時は進捗表示を抑制）
+/// * `machine_output` - 機械可読出力フラグ（true時は機械向けJSON出力）
+/// * `show_progress` - 進捗表示フラグ（false時は進捗を完全に抑制）
 ///
 /// # 戻り値
 /// 処理が正常に完了した場合は`Ok(())`、タイムアウトした場合は警告を出力
 pub async fn handle_upload_progress(
     mut progress_rx: tokio::sync::mpsc::Receiver<UploadProgress>,
     machine_output: bool,
+    show_progress: bool,
 ) -> Result<()> {
     // タイムアウトを設定して無限待機を防ぐ
     use tokio::time::{timeout, Duration};
@@ -115,16 +117,26 @@ pub async fn handle_upload_progress(
     loop {
         match timeout(progress_timeout, progress_rx.recv()).await {
             Ok(Some(progress)) => {
-                if !machine_output {
+                if !show_progress {
+                    // --progress フラグが指定されていない場合は進捗を表示しない
+                    continue;
+                }
+                
+                if machine_output {
+                    // 機械可読JSON出力（stdout）
+                    // JSONL形式（1行1JSON）で出力
+                    if let Ok(json) = serde_json::to_string(&progress) {
+                        println!("{}", json);
+                    }
+                } else {
+                    // 人間向け進捗表示（stderr）
                     // ドメイン層の型をプレゼンテーション層の型に変換（借用）
                     // Option<DisplayProgress>を返すため、表示が必要な場合のみ出力
                     if let Some(display_progress) = progress.to_display() {
-                        // 人間向け進捗表示（stderr）
                         display_upload_progress(&display_progress);
                     }
                     // Noneの場合は表示を抑制（10秒未満の経過時間更新など）
                 }
-                // --machine フラグでは進捗メッセージを抑制
             }
             Ok(std::option::Option::None) => {
                 // チャネルがクローズされた（正常終了）
@@ -169,6 +181,9 @@ impl ToDisplay for UploadProgress {
             }
             UploadPhase::UploadingFile { file_name, size_bytes } => {
                 Some(format_uploading_file(file_name, *size_bytes))
+            }
+            UploadPhase::UploadingChunk { current_chunk, total_chunks, bytes_sent, total_bytes } => {
+                Some(format_uploading_chunk(*current_chunk, *total_chunks, *bytes_sent, *total_bytes))
             }
             UploadPhase::FileUploaded { file_name, size_bytes } => {
                 Some(format_file_uploaded(file_name, *size_bytes))
@@ -237,6 +252,34 @@ fn format_uploading_file(file_name: &str, size_bytes: u64) -> DisplayProgress {
             "Uploading file: {} ({:.prec$} MB)...",
             file_name,
             size_mb,
+            prec = precision
+        ),
+        ProgressCategory::Upload,
+    )
+}
+
+/// チャンクアップロード中の進捗表示を生成
+///
+/// 例: "Uploading chunk 2/5 (64.00 MB / 160.00 MB, 40%)"
+fn format_uploading_chunk(
+    current_chunk: usize,
+    total_chunks: usize,
+    bytes_sent: u64,
+    total_bytes: u64,
+) -> DisplayProgress {
+    let sent_mb = bytes_sent as f64 / BYTES_PER_MB;
+    let total_mb = total_bytes as f64 / BYTES_PER_MB;
+    let percentage = (bytes_sent as f64 / total_bytes as f64 * 100.0) as u8;
+    let precision = APP_CONFIG.presentation.size_display_precision;
+    
+    DisplayProgress::new(
+        format!(
+            "Uploading chunk {}/{} ({:.prec$} MB / {:.prec$} MB, {}%)",
+            current_chunk,
+            total_chunks,
+            sent_mb,
+            total_mb,
+            percentage,
             prec = precision
         ),
         ProgressCategory::Upload,
