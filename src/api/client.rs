@@ -7,6 +7,9 @@ use crate::config::APP_CONFIG;
 use reqwest::{Client, Response};
 use std::time::Duration;
 
+/// APIクライアントの結果型
+type ApiResult<T> = Result<T, InfraError>;
+
 /// APIクライアント
 pub struct ApiClient {
     client: Client,
@@ -21,7 +24,7 @@ impl ApiClient {
     ///
     /// # Returns
     /// 設定済みのAPIクライアント
-    pub fn new(base_url: String) -> Result<Self, InfraError> {
+    pub fn new(base_url: String) -> ApiResult<Self> {
         let timeout = Duration::from_secs(APP_CONFIG.api.timeout_seconds);
 
         let client = Client::builder()
@@ -33,7 +36,7 @@ impl ApiClient {
     }
 
     /// デフォルトのプロダクション環境クライアントを作成
-    pub fn production() -> Result<Self, InfraError> {
+    pub fn production() -> ApiResult<Self> {
         Self::new(APP_CONFIG.api.endpoint.to_string())
     }
 
@@ -46,28 +49,11 @@ impl ApiClient {
         &self,
         endpoint: &str,
         auth_header: Option<&str>,
-    ) -> Result<Response, InfraError> {
-        let url = format!("{}{}", self.base_url, endpoint);
-
-        let mut request = self.client.get(&url);
-
-        if let Some(auth) = auth_header {
-            request = request.header("Authorization", auth);
-        }
-
-        let response = request.send().await.map_err(|e| {
-            if e.is_timeout() {
-                InfraError::Timeout {
-                    operation: format!("GET {}", endpoint),
-                }
-            } else if e.is_connect() {
-                InfraError::network(format!("Connection failed to {}: {}", url, e))
-            } else {
-                InfraError::network(format!("Request failed: {}", e))
-            }
-        })?;
-
-        Ok(response)
+    ) -> ApiResult<Response> {
+        let url = self.build_url(endpoint);
+        let request = self.build_request(self.client.get(&url), auth_header);
+        
+        Self::send_with_error_handling(request, endpoint, "GET").await
     }
 
     /// POSTリクエストを送信
@@ -81,28 +67,11 @@ impl ApiClient {
         endpoint: &str,
         body: &T,
         auth_header: Option<&str>,
-    ) -> Result<Response, InfraError> {
-        let url = format!("{}{}", self.base_url, endpoint);
-
-        let mut request = self.client.post(&url).json(body);
-
-        if let Some(auth) = auth_header {
-            request = request.header("Authorization", auth);
-        }
-
-        let response = request.send().await.map_err(|e| {
-            if e.is_timeout() {
-                InfraError::Timeout {
-                    operation: format!("POST {}", endpoint),
-                }
-            } else if e.is_connect() {
-                InfraError::network(format!("Connection failed to {}: {}", url, e))
-            } else {
-                InfraError::network(format!("Request failed: {}", e))
-            }
-        })?;
-
-        Ok(response)
+    ) -> ApiResult<Response> {
+        let url = self.build_url(endpoint);
+        let request = self.build_request(self.client.post(&url).json(body), auth_header);
+        
+        Self::send_with_error_handling(request, endpoint, "POST").await
     }
 
     /// PUTリクエストを送信（ファイルアップロード用）
@@ -148,28 +117,45 @@ impl ApiClient {
         &self,
         endpoint: &str,
         auth_header: Option<&str>,
-    ) -> Result<Response, InfraError> {
-        let url = format!("{}{}", self.base_url, endpoint);
+    ) -> ApiResult<Response> {
+        let url = self.build_url(endpoint);
+        let request = self.build_request(self.client.delete(&url), auth_header);
+        
+        Self::send_with_error_handling(request, endpoint, "DELETE").await
+    }
 
-        let mut request = self.client.delete(&url);
+    /// URLを構築
+    fn build_url(&self, endpoint: &str) -> String {
+        format!("{}{}", self.base_url, endpoint)
+    }
 
+    /// 認証ヘッダーを付与したリクエストを構築
+    fn build_request(
+        &self,
+        mut request: reqwest::RequestBuilder,
+        auth_header: Option<&str>,
+    ) -> reqwest::RequestBuilder {
         if let Some(auth) = auth_header {
             request = request.header("Authorization", auth);
         }
+        request
+    }
 
-        let response = request.send().await.map_err(|e| {
+    /// リクエストを送信し、エラーハンドリングを行う
+    async fn send_with_error_handling(
+        request: reqwest::RequestBuilder,
+        endpoint: &str,
+        method: &str,
+    ) -> ApiResult<Response> {
+        request.send().await.map_err(|e| {
             if e.is_timeout() {
-                InfraError::Timeout {
-                    operation: format!("DELETE {}", endpoint),
-                }
+                InfraError::timeout(format!("{} {}", method, endpoint))
             } else if e.is_connect() {
-                InfraError::network(format!("Connection failed to {}: {}", url, e))
+                InfraError::network(format!("Connection failed for {} {}: {}", method, endpoint, e))
             } else {
-                InfraError::network(format!("Request failed: {}", e))
+                InfraError::network(format!("Request failed for {} {}: {}", method, endpoint, e))
             }
-        })?;
-
-        Ok(response)
+        })
     }
 
     /// レスポンスをチェックしてエラーを返す
@@ -180,7 +166,7 @@ impl ApiClient {
     pub async fn check_response(
         response: Response,
         endpoint: &str,
-    ) -> Result<Response, InfraError> {
+    ) -> ApiResult<Response> {
         let status = response.status();
 
         if status.is_success() {
@@ -193,17 +179,13 @@ impl ApiClient {
             .await
             .unwrap_or_else(|_| "Unable to read error response".to_string());
 
-        Err(InfraError::Api {
-            endpoint: endpoint.to_string(),
-            message: error_body,
-            status_code: Some(status_code),
-        })
+        Err(InfraError::api(endpoint, error_body, Some(status_code)))
     }
 
     /// JSONレスポンスをデシリアライズ
     pub async fn parse_json<T: serde::de::DeserializeOwned>(
         response: Response,
-    ) -> Result<T, InfraError> {
+    ) -> ApiResult<T> {
         response.json().await.map_err(|e| {
             InfraError::network(format!("Failed to parse JSON response: {}", e))
         })

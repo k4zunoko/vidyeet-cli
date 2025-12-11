@@ -33,6 +33,34 @@ pub enum DomainError {
 }
 
 impl DomainError {
+    /// ファイルが見つからないエラーを生成
+    pub fn file_not_found(path: impl Into<String>) -> Self {
+        Self::FileNotFound { path: path.into() }
+    }
+
+    /// 無効なファイル形式エラーを生成
+    pub fn invalid_format(
+        path: impl Into<String>,
+        supported_formats: &[&str],
+        found: impl Into<String>,
+    ) -> Self {
+        Self::InvalidFormat {
+            path: path.into(),
+            expected: format!("one of: {}", supported_formats.join(", ")),
+            found: found.into(),
+        }
+    }
+
+    /// ファイルが空エラーを生成
+    pub fn empty_file(path: impl Into<String>) -> Self {
+        Self::EmptyFile { path: path.into() }
+    }
+
+    /// ディレクトリ指定エラーを生成
+    pub fn not_a_file(path: impl Into<String>) -> Self {
+        Self::NotAFile { path: path.into() }
+    }
+
     /// エラーの深刻度を返す
     ///
     /// 終了コードの決定に使用できる

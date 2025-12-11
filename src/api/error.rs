@@ -40,8 +40,39 @@ impl InfraError {
         }
     }
 
+    /// APIエラーを作成
+    pub fn api(
+        endpoint: impl Into<String>,
+        message: impl Into<String>,
+        status_code: Option<u16>,
+    ) -> Self {
+        Self::Api {
+            endpoint: endpoint.into(),
+            message: message.into(),
+            status_code,
+        }
+    }
+
+    /// タイムアウトエラーを作成
+    pub fn timeout(operation: impl Into<String>) -> Self {
+        Self::Timeout {
+            operation: operation.into(),
+        }
+    }
+
     /// エラーの深刻度を返す
     pub fn severity(&self) -> ErrorSeverity {
         ErrorSeverity::SystemError
+    }
+
+    /// ユーザー向けのヒントメッセージを返す
+    #[allow(dead_code)]
+    pub fn hint(&self) -> Option<&str> {
+        match self {
+            Self::Network { .. } => Some("Check your internet connection and try again."),
+            Self::Api { .. } => Some("Check your API credentials and permissions."),
+            Self::Timeout { .. } => Some("The operation took too long. Try again or check your connection."),
+            Self::Io(_) => Some("An I/O error occurred. Check file permissions and disk space."),
+        }
     }
 }

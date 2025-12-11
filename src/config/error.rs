@@ -46,6 +46,51 @@ pub enum ConfigError {
 }
 
 impl ConfigError {
+    /// ディレクトリが見つからないエラーを生成
+    pub fn directory_not_found(message: impl Into<String>) -> Self {
+        Self::DirectoryNotFound {
+            message: message.into(),
+        }
+    }
+
+    /// ファイルシステムエラーを生成
+    pub fn file_system(context: impl Into<String>, source: io::Error) -> Self {
+        Self::FileSystem {
+            context: context.into(),
+            source,
+        }
+    }
+
+    /// パースエラーを生成
+    pub fn parse_error(context: impl Into<String>, source: toml::de::Error) -> Self {
+        Self::ParseError {
+            context: context.into(),
+            source,
+        }
+    }
+
+    /// シリアライズエラーを生成
+    pub fn serialize_error(context: impl Into<String>, source: toml::ser::Error) -> Self {
+        Self::SerializeError {
+            context: context.into(),
+            source,
+        }
+    }
+
+    /// 検証エラーを生成
+    pub fn validation_error(message: impl Into<String>) -> Self {
+        Self::ValidationError {
+            message: message.into(),
+        }
+    }
+
+    /// トークンが見つからないエラーを生成
+    pub fn token_not_found(message: impl Into<String>) -> Self {
+        Self::TokenNotFound {
+            message: message.into(),
+        }
+    }
+
     /// エラーの深刻度を返す
     ///
     /// 終了コードの決定に使用できる

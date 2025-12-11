@@ -39,15 +39,21 @@ impl AuthManager {
     ///
     /// # Returns
     /// 認証が成功すればOk、失敗すればErr
+    ///
+    /// # エラー
+    /// - API接続に失敗した場合
+    /// - 認証情報が無効な場合
     pub async fn test_credentials(&self) -> Result<(), InfraError> {
+        const TEST_ENDPOINT: &str = "/video/v1/assets";
+        
         let client = ApiClient::production()?;
         let auth_header = self.get_auth_header();
 
         let response = client
-            .get("/video/v1/assets", Some(&auth_header))
+            .get(TEST_ENDPOINT, Some(&auth_header))
             .await?;
 
-        ApiClient::check_response(response, "/video/v1/assets").await?;
+        ApiClient::check_response(response, TEST_ENDPOINT).await?;
 
         Ok(())
     }

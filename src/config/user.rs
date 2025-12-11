@@ -11,7 +11,14 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
-const DEFAULT_TIMEZONE_OFFSET: i32 = 0; // UTC offset in seconds
+/// デフォルトのタイムゾーンオフセット（UTC）
+const DEFAULT_TIMEZONE_OFFSET: i32 = 0;
+
+/// タイムゾーンオフセットの最大値（+18時間 = 64800秒）
+const MAX_TIMEZONE_OFFSET: i32 = 64800;
+
+/// タイムゾーンオフセットの最小値（-18時間 = -64800秒）
+const MIN_TIMEZONE_OFFSET: i32 = -64800;
 
 /// Mux認証設定
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -59,9 +66,7 @@ impl UserConfig {
     /// ホームディレクトリが取得できない場合に ConfigError::DirectoryNotFound を返します。
     pub fn config_path() -> Result<PathBuf, ConfigError> {
         dirs::config_dir()
-            .ok_or_else(|| ConfigError::DirectoryNotFound {
-                message: "Failed to get user config directory".to_string(),
-            })
+            .ok_or_else(|| ConfigError::directory_not_found("Failed to get user config directory"))
             .map(|config_dir| config_dir.join("vidyeet").join("config.toml"))
     }
 
@@ -83,15 +88,17 @@ impl UserConfig {
             Self::create_default_config(&config_path)?;
         }
 
-        let content = fs::read_to_string(&config_path).map_err(|e| ConfigError::FileSystem {
-            context: format!("Failed to read config file: {}", config_path.display()),
-            source: e,
-        })?;
+        let content = fs::read_to_string(&config_path)
+            .map_err(|e| ConfigError::file_system(
+                format!("Failed to read config file: {}", config_path.display()),
+                e,
+            ))?;
 
-        let config: Self = toml::from_str(&content).map_err(|e| ConfigError::ParseError {
-            context: format!("Failed to parse config file ({})", config_path.display()),
-            source: e,
-        })?;
+        let config: Self = toml::from_str(&content)
+            .map_err(|e| ConfigError::parse_error(
+                format!("Failed to parse config file ({})", config_path.display()),
+                e,
+            ))?;
 
         // 自動検証（Fail Fast）
         config.validate()?;
@@ -123,21 +130,20 @@ impl UserConfig {
     fn create_default_config(config_path: &PathBuf) -> Result<(), ConfigError> {
         // 設定ディレクトリが存在しない場合は作成
         if let Some(parent) = config_path.parent() {
-            fs::create_dir_all(parent).map_err(|e| ConfigError::FileSystem {
-                context: format!("Failed to create config directory: {}", parent.display()),
-                source: e,
-            })?;
+            fs::create_dir_all(parent)
+                .map_err(|e| ConfigError::file_system(
+                    format!("Failed to create config directory: {}", parent.display()),
+                    e,
+                ))?;
         }
 
         // デフォルト値からTOMLを生成して書き込み
         let default_toml = Self::default_toml_content();
-        fs::write(config_path, default_toml).map_err(|e| ConfigError::FileSystem {
-            context: format!(
-                "Failed to create default config file: {}",
-                config_path.display()
-            ),
-            source: e,
-        })?;
+        fs::write(config_path, default_toml)
+            .map_err(|e| ConfigError::file_system(
+                format!("Failed to create default config file: {}", config_path.display()),
+                e,
+            ))?;
 
         Ok(())
     }
@@ -170,21 +176,21 @@ timezone_offset_seconds = {}
 
         // 設定ディレクトリが存在しない場合は作成
         if let Some(parent) = config_path.parent() {
-            fs::create_dir_all(parent).map_err(|e| ConfigError::FileSystem {
-                context: format!("Failed to create config directory: {}", parent.display()),
-                source: e,
-            })?;
+            fs::create_dir_all(parent)
+                .map_err(|e| ConfigError::file_system(
+                    format!("Failed to create config directory: {}", parent.display()),
+                    e,
+                ))?;
         }
 
-        let content = toml::to_string_pretty(self).map_err(|e| ConfigError::SerializeError {
-            context: "Failed to serialize config".to_string(),
-            source: e,
-        })?;
+        let content = toml::to_string_pretty(self)
+            .map_err(|e| ConfigError::serialize_error("Failed to serialize config", e))?;
 
-        fs::write(&config_path, content).map_err(|e| ConfigError::FileSystem {
-            context: format!("Failed to write config file: {}", config_path.display()),
-            source: e,
-        })?;
+        fs::write(&config_path, content)
+            .map_err(|e| ConfigError::file_system(
+                format!("Failed to write config file: {}", config_path.display()),
+                e,
+            ))?;
 
         Ok(())
     }
@@ -200,30 +206,38 @@ timezone_offset_seconds = {}
     /// # Errors
     /// 検証に失敗した場合に ConfigError::ValidationError を返します。
     pub fn validate(&self) -> Result<(), ConfigError> {
-        // 認証情報が存在する場合、内容を検証
+        // 認証情報の検証
         if let Some(auth) = &self.auth {
-            if auth.token_id.trim().is_empty() {
-                return Err(ConfigError::ValidationError {
-                    message: "Authentication token_id cannot be empty. Please run 'vidyeet login' again.".to_string(),
-                });
-            }
-            if auth.token_secret.trim().is_empty() {
-                return Err(ConfigError::ValidationError {
-                    message: "Authentication token_secret cannot be empty. Please run 'vidyeet login' again.".to_string(),
-                });
-            }
+            Self::validate_auth_field(&auth.token_id, "token_id")?;
+            Self::validate_auth_field(&auth.token_secret, "token_secret")?;
         }
 
-        // タイムゾーンオフセットの検証(±18時間 = ±64800秒の範囲)
-        if self.timezone_offset_seconds < -64800 || self.timezone_offset_seconds > 64800 {
-            return Err(ConfigError::ValidationError {
-                message: format!(
-                    "Invalid timezone offset '{}' seconds. Must be between -64800 and 64800 (±18 hours)",
-                    self.timezone_offset_seconds
-                ),
-            });
-        }
+        // タイムゾーンオフセットの検証
+        Self::validate_timezone_offset(self.timezone_offset_seconds)?;
 
+        Ok(())
+    }
+
+    /// 認証情報のフィールドを検証
+    fn validate_auth_field(value: &str, field_name: &str) -> Result<(), ConfigError> {
+        if value.trim().is_empty() {
+            return Err(ConfigError::validation_error(
+                format!("Authentication {} cannot be empty. Please run 'vidyeet login' again.", field_name)
+            ));
+        }
+        Ok(())
+    }
+
+    /// タイムゾーンオフセットを検証
+    fn validate_timezone_offset(offset: i32) -> Result<(), ConfigError> {
+        if offset < MIN_TIMEZONE_OFFSET || offset > MAX_TIMEZONE_OFFSET {
+            return Err(ConfigError::validation_error(
+                format!(
+                    "Invalid timezone offset '{}' seconds. Must be between {} and {} (±18 hours)",
+                    offset, MIN_TIMEZONE_OFFSET, MAX_TIMEZONE_OFFSET
+                )
+            ));
+        }
         Ok(())
     }
 
@@ -242,9 +256,9 @@ timezone_offset_seconds = {}
     pub fn get_auth(&self) -> Result<&AuthConfig, ConfigError> {
         self.auth
             .as_ref()
-            .ok_or_else(|| ConfigError::TokenNotFound {
-                message: "Authentication credentials not found. Please run 'vidyeet login' first.".to_string(),
-            })
+            .ok_or_else(|| ConfigError::token_not_found(
+                "Authentication credentials not found. Please run 'vidyeet login' first."
+            ))
     }
 
     /// 認証情報が存在するかチェック

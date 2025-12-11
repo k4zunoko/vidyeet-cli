@@ -37,11 +37,9 @@ pub fn format_timestamp(timestamp_str: &str, user_config: &UserConfig) -> String
 
 /// 指定されたオフセット(秒)でフォーマット
 fn format_with_offset(datetime: DateTime<Utc>, offset_seconds: i32) -> String {
-    // オフセットを適用
-    let offset = match FixedOffset::east_opt(offset_seconds) {
-        Some(o) => o,
-        std::option::Option::None => return datetime.format("%Y-%m-%d %H:%M:%S +00:00").to_string(), // 無効なオフセットの場合はUTCにフォールバック
-    };
+    // オフセットを適用（無効な場合はUTCにフォールバック）
+    let offset = FixedOffset::east_opt(offset_seconds)
+        .unwrap_or_else(|| FixedOffset::east_opt(0).expect("UTC offset should always be valid"));
     
     let datetime_with_offset = datetime.with_timezone(&offset);
     datetime_with_offset.format("%Y-%m-%d %H:%M:%S %:z").to_string()
