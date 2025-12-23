@@ -257,8 +257,7 @@ fn is_capacity_limit_error(error: &anyhow::Error) -> bool {
             if mux_error.error.error_type == "invalid_parameters" {
                 // メッセージに"limited to"と"assets"の両方が含まれる場合のみ制限エラー
                 let messages_text = mux_error.error.messages.join(" ").to_lowercase();
-                return messages_text.contains("limited to")
-                    && messages_text.contains("assets");
+                return messages_text.contains("limited to") && messages_text.contains("assets");
             }
         }
     }

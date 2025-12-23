@@ -13,6 +13,7 @@ pub enum CommandResult {
     Upload(UploadResult),
     Status(StatusResult),
     List(ListResult),
+    Show(ShowResult),
     Delete(DeleteResult),
     Help,
 }
@@ -80,6 +81,33 @@ pub struct ListResult {
     pub videos: Vec<VideoInfo>,
     /// 合計数
     pub total_count: usize,
+}
+
+/// アセット詳細表示コマンドの結果
+#[derive(Debug, Clone, Serialize)]
+pub struct ShowResult {
+    /// アセットID
+    pub asset_id: String,
+    /// ステータス (preparing, ready, errored)
+    pub status: String,
+    /// 動画時間（秒）
+    pub duration: Option<f64>,
+    /// アスペクト比
+    pub aspect_ratio: Option<String>,
+    /// ビデオ品質
+    pub video_quality: Option<String>,
+    /// 作成日時（Unix timestamp）
+    pub created_at: String,
+    /// 再生ID
+    pub playback_ids: Vec<crate::api::types::PlaybackId>,
+    /// HLS再生URL
+    pub hls_url: Option<String>,
+    /// MP4再生URL
+    pub mp4_url: Option<String>,
+    /// 動画トラック情報
+    pub tracks: Option<Vec<crate::api::types::Track>>,
+    /// Static Renditions（MP4など）
+    pub static_renditions: Option<crate::api::types::StaticRenditionsWrapper>,
 }
 
 /// 削除コマンドの結果

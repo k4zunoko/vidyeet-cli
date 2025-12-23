@@ -21,6 +21,7 @@ Available commands:
   logout           - Logout from Mux Video
   status           - Check authentication status
   list             - List all uploaded videos
+  show <asset_id>  - Show detailed information about a specific video asset
   delete <asset_id> [--force]
                    - Delete a video asset from Mux Video
                      --force: Skip confirmation prompt
@@ -152,6 +153,91 @@ fn output_human_readable(result: &CommandResult) -> Result<()> {
                 eprintln!("---");
             }
         }
+        CommandResult::Show(r) => {
+            eprintln!();
+            eprintln!("Asset Details:");
+            eprintln!("==============");
+            eprintln!("Asset ID:       {}", r.asset_id);
+            eprintln!("Status:         {}", r.status);
+
+            if let Some(duration) = r.duration {
+                let minutes = (duration / 60.0) as u64;
+                let seconds = (duration % 60.0) as u64;
+                eprintln!(
+                    "Duration:       {}:{:02} ({:.2}s)",
+                    minutes, seconds, duration
+                );
+            }
+
+            if let Some(aspect_ratio) = &r.aspect_ratio {
+                eprintln!("Aspect Ratio:   {}", aspect_ratio);
+            }
+
+            if let Some(video_quality) = &r.video_quality {
+                eprintln!("Video Quality:  {}", video_quality);
+            }
+
+            // 作成日時をフォーマット（ユーザー設定のタイムゾーンを使用）
+            let user_config = crate::config::user::UserConfig::load().ok();
+            let formatted_time = if let Some(config) = &user_config {
+                crate::domain::formatter::format_timestamp(&r.created_at, config)
+            } else {
+                r.created_at.clone()
+            };
+            eprintln!("Created At:     {}", formatted_time);
+
+            eprintln!();
+            eprintln!("Playback Information:");
+            eprintln!("--------------------");
+
+            if !r.playback_ids.is_empty() {
+                for (idx, playback_id) in r.playback_ids.iter().enumerate() {
+                    eprintln!("Playback ID #{}: {}", idx + 1, playback_id.id);
+                    eprintln!("  Policy:       {}", playback_id.policy);
+                }
+            } else {
+                eprintln!("No playback IDs available");
+            }
+
+            if let Some(hls_url) = &r.hls_url {
+                eprintln!("HLS URL:        {}", hls_url);
+            }
+
+            if let Some(mp4_url) = &r.mp4_url {
+                eprintln!("MP4 URL:        {}", mp4_url);
+            }
+
+            if let Some(tracks) = &r.tracks
+                && !tracks.is_empty()
+            {
+                eprintln!();
+                eprintln!("Tracks:");
+                eprintln!("-------");
+                for (idx, track) in tracks.iter().enumerate() {
+                    eprint!("Track #{}: {} ", idx + 1, track.track_type);
+                    if let Some(duration) = track.duration {
+                        eprint!("(duration: {:.2}s)", duration);
+                    }
+                    eprintln!();
+                }
+            }
+
+            if let Some(renditions) = &r.static_renditions
+                && !renditions.files.is_empty()
+            {
+                eprintln!();
+                eprintln!("Static Renditions:");
+                eprintln!("------------------");
+                for (idx, rendition) in renditions.files.iter().enumerate() {
+                    eprintln!("Rendition #{}: {}", idx + 1, rendition.name);
+                    eprintln!("  Status:       {}", rendition.status);
+                    eprintln!("  Resolution:   {}", rendition.resolution);
+                    eprintln!("  Type:         {}", rendition.rendition_type);
+                    eprintln!("  Format:       {}", rendition.ext);
+                }
+            }
+            eprintln!();
+        }
         CommandResult::Upload(r) => {
             eprintln!("\nUpload completed successfully!");
             eprintln!("---");
@@ -240,6 +326,23 @@ fn output_machine_readable(result: &CommandResult) -> Result<()> {
                 "command": "list",
                 "videos": r.videos,
                 "total_count": r.total_count
+            })
+        }
+        CommandResult::Show(r) => {
+            serde_json::json!({
+                "success": true,
+                "command": "show",
+                "asset_id": r.asset_id,
+                "status": r.status,
+                "duration": r.duration,
+                "aspect_ratio": r.aspect_ratio,
+                "video_quality": r.video_quality,
+                "created_at": r.created_at,
+                "playback_ids": r.playback_ids,
+                "hls_url": r.hls_url,
+                "mp4_url": r.mp4_url,
+                "tracks": r.tracks,
+                "static_renditions": r.static_renditions
             })
         }
         CommandResult::Upload(r) => {

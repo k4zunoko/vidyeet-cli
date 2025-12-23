@@ -4,6 +4,7 @@ pub mod list;
 pub mod login;
 pub mod logout;
 pub mod result;
+pub mod show;
 pub mod status;
 pub mod upload;
 

@@ -50,6 +50,15 @@ pub async fn parse_args(args: &[String]) -> Result<()> {
         "list" => commands::list::execute()
             .await
             .context("List command failed")?,
+        "show" => {
+            let asset_id = args
+                .get(command_start_index + 1)
+                .context("Please specify an asset ID for show command")?;
+
+            commands::show::execute(asset_id)
+                .await
+                .context("Show command failed")?
+        }
         "delete" => {
             let asset_id = args
                 .get(command_start_index + 1)
