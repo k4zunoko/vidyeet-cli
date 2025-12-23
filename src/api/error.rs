@@ -1,19 +1,17 @@
-use std::io;
 /// インフラ層のエラー定義
 ///
 /// 外部システム（ファイルシステム、ネットワーク、API）との
 /// やり取りで発生するエラーを構造化して定義。
 /// #[from] / #[source] を使って原因連鎖を保持する。
 use crate::error_severity::ErrorSeverity;
+use std::io;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum InfraError {
     /// ネットワークエラー
     #[error("network error: {message}")]
-    Network {
-        message: String,
-    },
+    Network { message: String },
 
     /// API通信エラー
     #[error("API error: {endpoint} - {message}")]
@@ -71,7 +69,9 @@ impl InfraError {
         match self {
             Self::Network { .. } => Some("Check your internet connection and try again."),
             Self::Api { .. } => Some("Check your API credentials and permissions."),
-            Self::Timeout { .. } => Some("The operation took too long. Try again or check your connection."),
+            Self::Timeout { .. } => {
+                Some("The operation took too long. Try again or check your connection.")
+            }
             Self::Io(_) => Some("An I/O error occurred. Check file permissions and disk space."),
         }
     }

@@ -26,9 +26,8 @@ pub struct LoginCredentials {
 /// 成功時はOk(CommandResult)、失敗時はエラー
 pub async fn execute(credentials: LoginCredentials) -> Result<CommandResult> {
     // 既存の設定を確認
-    let mut config = UserConfig::load()
-        .context("Failed to load configuration file")?;
-    
+    let mut config = UserConfig::load().context("Failed to load configuration file")?;
+
     let was_logged_in = config.has_auth();
 
     // 認証マネージャーを作成
@@ -45,12 +44,8 @@ pub async fn execute(credentials: LoginCredentials) -> Result<CommandResult> {
 
     // 認証情報を保存
     config.set_auth(credentials.token_id, credentials.token_secret);
-    
-    config
-        .save()
-        .context("Failed to save configuration file")?;
+
+    config.save().context("Failed to save configuration file")?;
 
     Ok(CommandResult::Login(LoginResult { was_logged_in }))
 }
-
-

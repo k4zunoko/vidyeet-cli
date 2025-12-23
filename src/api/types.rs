@@ -62,10 +62,10 @@ pub struct DirectUploadData {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewAssetSettings {
     pub playback_policies: Vec<String>,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub video_quality: Option<String>,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub meta: Option<AssetMeta>,
 }
@@ -74,10 +74,10 @@ pub struct NewAssetSettings {
 pub struct AssetMeta {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub creator_id: Option<String>,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub external_id: Option<String>,
 }
@@ -143,7 +143,7 @@ pub struct PlaybackId {
 pub struct Track {
     #[serde(rename = "type")]
     pub track_type: String,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub duration: Option<f64>,
 }
@@ -182,7 +182,7 @@ pub struct StaticRenditionsWrapper {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AssetsListResponse {
     pub data: Vec<AssetData>,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub next_cursor: Option<String>,
 }
@@ -190,13 +190,14 @@ pub struct AssetsListResponse {
 impl AssetResponse {
     /// 再生URLを構築（HLS形式）
     pub fn get_playback_url(&self) -> Option<String> {
-        self.data.playback_ids.first().map(|playback_id| {
-            format!("https://stream.mux.com/{}.m3u8", playback_id.id)
-        })
+        self.data
+            .playback_ids
+            .first()
+            .map(|playback_id| format!("https://stream.mux.com/{}.m3u8", playback_id.id))
     }
 
     /// MP4再生URLを構築
-    /// 
+    ///
     /// static_renditionsから最初のready状態のMP4を探し、
     /// playback_idと組み合わせてMP4のストリーミングURLを返します。
     pub fn get_mp4_playback_url(&self) -> Option<String> {
@@ -206,23 +207,31 @@ impl AssetResponse {
 
 impl AssetData {
     /// MP4再生URLを構築
-    /// 
+    ///
     /// static_renditionsから最初のready状態のMP4を探し、
     /// playback_idと組み合わせてMP4のストリーミングURLを返します。
     /// ready状態のMP4がない場合は、playback_idから予測URLを生成します。
     pub fn get_mp4_playback_url(&self) -> Option<String> {
         let playback_id = self.playback_ids.first()?;
-        
+
         // ready状態のMP4 renditionを探す
-        if let Some(wrapper) = self.static_renditions.as_ref() {
-            if let Some(rendition) = wrapper.files.iter()
-                .find(|r| r.status == "ready" && r.ext == "mp4") {
-                return Some(format!("https://stream.mux.com/{}/{}", playback_id.id, rendition.name));
-            }
+        if let Some(wrapper) = self.static_renditions.as_ref()
+            && let Some(rendition) = wrapper
+                .files
+                .iter()
+                .find(|r| r.status == "ready" && r.ext == "mp4")
+        {
+            return Some(format!(
+                "https://stream.mux.com/{}/{}",
+                playback_id.id, rendition.name
+            ));
         }
-        
+
         // ready状態のMP4がない場合は予測URLを生成
-        Some(format!("https://stream.mux.com/{}/highest.mp4", playback_id.id))
+        Some(format!(
+            "https://stream.mux.com/{}/highest.mp4",
+            playback_id.id
+        ))
     }
 }
 
@@ -312,7 +321,10 @@ mod tests {
 
         let mp4_url = response_with_mp4.get_mp4_playback_url();
         assert!(mp4_url.is_some());
-        assert_eq!(mp4_url.unwrap(), "https://stream.mux.com/playback_abc/highest.mp4");
+        assert_eq!(
+            mp4_url.unwrap(),
+            "https://stream.mux.com/playback_abc/highest.mp4"
+        );
 
         // MP4 renditionがない場合
         let response_without_mp4 = AssetResponse {
@@ -334,7 +346,10 @@ mod tests {
 
         let mp4_url = response_without_mp4.get_mp4_playback_url();
         assert!(mp4_url.is_some());
-        assert_eq!(mp4_url.unwrap(), "https://stream.mux.com/playback_def/highest.mp4");
+        assert_eq!(
+            mp4_url.unwrap(),
+            "https://stream.mux.com/playback_def/highest.mp4"
+        );
     }
 
     #[test]

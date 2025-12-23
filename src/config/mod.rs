@@ -80,7 +80,10 @@ mod tests {
         let config_auth = config.get_auth().expect("Auth should be present");
         assert_eq!(reloaded_auth.token_id, config_auth.token_id);
         assert_eq!(reloaded_auth.token_secret, config_auth.token_secret);
-        assert_eq!(reloaded.timezone_offset_seconds, config.timezone_offset_seconds);
+        assert_eq!(
+            reloaded.timezone_offset_seconds,
+            config.timezone_offset_seconds
+        );
     }
 
     #[test]

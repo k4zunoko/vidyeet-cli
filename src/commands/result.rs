@@ -13,6 +13,7 @@ pub enum CommandResult {
     Upload(UploadResult),
     Status(StatusResult),
     List(ListResult),
+    Delete(DeleteResult),
     Help,
 }
 
@@ -79,6 +80,13 @@ pub struct ListResult {
     pub videos: Vec<VideoInfo>,
     /// 合計数
     pub total_count: usize,
+}
+
+/// 削除コマンドの結果
+#[derive(Debug, Clone, Serialize)]
+pub struct DeleteResult {
+    /// 削除されたアセットID
+    pub asset_id: String,
 }
 
 /// 動画情報

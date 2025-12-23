@@ -3,7 +3,6 @@
 /// コマンド実行結果をユーザー向け（人間可読）または
 /// 機械向け（JSON）形式で出力する責務を担います。
 /// CLI使用方法の表示もこのモジュールが担当します。
-
 use crate::commands::result::{CommandResult, Mp4Status};
 use anyhow::Result;
 
@@ -22,6 +21,9 @@ Available commands:
   logout           - Logout from Mux Video
   status           - Check authentication status
   list             - List all uploaded videos
+  delete <asset_id> [--force]
+                   - Delete a video asset from Mux Video
+                     --force: Skip confirmation prompt
   upload <file> [--progress]
                    - Upload a video to Mux Video
                      --progress: Show upload progress (required for progress output)
@@ -39,11 +41,11 @@ pub fn print_usage() {
 }
 
 /// コマンド結果を適切な形式で出力する
-/// 
+///
 /// # Arguments
 /// * `result` - コマンド実行結果
 /// * `machine_output` - 機械可読出力フラグ
-/// 
+///
 /// # Output
 /// * `machine_output = false`: 人間向けの詳細メッセージ（stderr）
 /// * `machine_output = true`: 機械可読JSON（stdout）
@@ -112,7 +114,7 @@ fn output_human_readable(result: &CommandResult) -> Result<()> {
             } else {
                 // ユーザー設定を読み込んでタイムゾーン設定を取得
                 let user_config = crate::config::user::UserConfig::load().ok();
-                
+
                 eprintln!("Found {} video(s):", r.total_count);
                 eprintln!();
                 for (idx, video) in r.videos.iter().enumerate() {
@@ -120,24 +122,24 @@ fn output_human_readable(result: &CommandResult) -> Result<()> {
                     eprintln!("Video #{}", idx + 1);
                     eprintln!("Asset ID: {}", video.asset_id);
                     eprintln!("Status: {}", video.status);
-                    
+
                     if let Some(duration) = video.duration {
                         let minutes = (duration / 60.0) as u64;
                         let seconds = (duration % 60.0) as u64;
                         eprintln!("Duration: {}:{:02}", minutes, seconds);
                     }
-                    
+
                     if let Some(aspect_ratio) = &video.aspect_ratio {
                         eprintln!("Aspect Ratio: {}", aspect_ratio);
                     }
-                    
+
                     if let Some(hls_url) = &video.hls_url {
                         eprintln!("HLS URL: {}", hls_url);
                     }
                     if let Some(mp4_url) = &video.mp4_url {
                         eprintln!("MP4 URL: {}", mp4_url);
                     }
-                    
+
                     // 作成日時をフォーマット（ユーザー設定のタイムゾーンを使用）
                     let formatted_time = if let Some(config) = &user_config {
                         crate::domain::formatter::format_timestamp(&video.created_at, config)
@@ -154,28 +156,30 @@ fn output_human_readable(result: &CommandResult) -> Result<()> {
             eprintln!("\nUpload completed successfully!");
             eprintln!("---");
             eprintln!("Asset ID: {}", r.asset_id);
-            
+
             // HLS再生URL（すぐに利用可能）
             if let Some(hls_url) = &r.hls_url {
                 eprintln!("\nHLS Streaming URL:");
                 eprintln!("{}", hls_url);
             }
-            
+
             // MP4再生URL（アプリケーション層で既に生成済み）
             eprintln!("\nMP4 Download URL:");
             if let Some(mp4_url) = &r.mp4_url {
                 eprintln!("{}", mp4_url);
-                
+
                 // MP4生成中の場合のみ注記を表示
                 if matches!(r.mp4_status, Mp4Status::Generating) {
-                    eprintln!("\nNote: MP4 file is being generated in the background (usually 2-5 minutes).");
+                    eprintln!(
+                        "\nNote: MP4 file is being generated in the background (usually 2-5 minutes)."
+                    );
                     eprintln!("The URL above will be available once generation completes.");
                     eprintln!("You can start streaming with HLS URL immediately!");
                 }
             } else {
                 eprintln!("(not available)");
             }
-            
+
             eprintln!("---");
 
             // 削除した動画がある場合
@@ -185,6 +189,13 @@ fn output_human_readable(result: &CommandResult) -> Result<()> {
                     r.deleted_old_videos
                 );
             }
+        }
+        CommandResult::Delete(r) => {
+            eprintln!();
+            eprintln!("✓ Asset deleted successfully!");
+            eprintln!("Asset ID: {}", r.asset_id);
+            eprintln!();
+            eprintln!("The video and all its data have been permanently removed.");
         }
         CommandResult::Help => {
             eprintln!("{}", HELP_TEXT);
@@ -246,6 +257,13 @@ fn output_machine_readable(result: &CommandResult) -> Result<()> {
                 "deleted_old_videos": r.deleted_old_videos
             })
         }
+        CommandResult::Delete(r) => {
+            serde_json::json!({
+                "success": true,
+                "command": "delete",
+                "asset_id": r.asset_id
+            })
+        }
         CommandResult::Help => {
             serde_json::json!({
                 "success": true,
@@ -261,7 +279,9 @@ fn output_machine_readable(result: &CommandResult) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commands::result::{LoginResult, LogoutResult, StatusResult, ListResult, UploadResult, Mp4Status};
+    use crate::commands::result::{
+        ListResult, LoginResult, LogoutResult, Mp4Status, StatusResult, UploadResult,
+    };
 
     #[test]
     fn test_output_machine_readable_login() {

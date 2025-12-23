@@ -9,9 +9,8 @@
 /// - `Option<DisplayProgress>`で表示抑制を明示的に表現
 /// - ヘルパー関数で各フェーズの変換ロジックを分離（密結合緩和）
 /// - 進捗受信ループの処理もこのモジュールで管理（プレゼンテーション層の責務）
-
 use crate::config::{APP_CONFIG, BYTES_PER_MB};
-use crate::domain::progress::{UploadProgress, UploadPhase};
+use crate::domain::progress::{UploadPhase, UploadProgress};
 use anyhow::Result;
 
 /// ドメイン型からプレゼンテーション表示型への変換トレイト
@@ -111,9 +110,9 @@ pub async fn handle_upload_progress(
     show_progress: bool,
 ) -> Result<()> {
     // タイムアウトを設定して無限待機を防ぐ
-    use tokio::time::{timeout, Duration};
+    use tokio::time::{Duration, timeout};
     let progress_timeout = Duration::from_secs(APP_CONFIG.upload.progress_timeout_secs);
-    
+
     loop {
         match timeout(progress_timeout, progress_rx.recv()).await {
             Ok(Some(progress)) => {
@@ -121,7 +120,7 @@ pub async fn handle_upload_progress(
                     // --progress フラグが指定されていない場合は進捗を表示しない
                     continue;
                 }
-                
+
                 if machine_output {
                     // 機械可読JSON出力（stdout）
                     // JSONL形式（1行1JSON）で出力
@@ -149,7 +148,7 @@ pub async fn handle_upload_progress(
             }
         }
     }
-    
+
     Ok(())
 }
 
@@ -167,33 +166,41 @@ pub async fn handle_upload_progress(
 impl ToDisplay for UploadProgress {
     fn to_display(&self) -> Option<DisplayProgress> {
         match &self.phase {
-            UploadPhase::ValidatingFile { file_path } => {
-                Some(format_validating_file(file_path))
-            }
-            UploadPhase::FileValidated { file_name, size_bytes, format } => {
-                Some(format_file_validated(file_name, *size_bytes, format))
-            }
+            UploadPhase::ValidatingFile { file_path } => Some(format_validating_file(file_path)),
+            UploadPhase::FileValidated {
+                file_name,
+                size_bytes,
+                format,
+            } => Some(format_file_validated(file_name, *size_bytes, format)),
             UploadPhase::CreatingDirectUpload { file_name } => {
                 Some(format_creating_upload(file_name))
             }
             UploadPhase::DirectUploadCreated { upload_id } => {
                 Some(format_upload_created(upload_id))
             }
-            UploadPhase::UploadingFile { file_name, size_bytes } => {
-                Some(format_uploading_file(file_name, *size_bytes))
-            }
-            UploadPhase::UploadingChunk { current_chunk, total_chunks, bytes_sent, total_bytes } => {
-                Some(format_uploading_chunk(*current_chunk, *total_chunks, *bytes_sent, *total_bytes))
-            }
-            UploadPhase::FileUploaded { file_name, size_bytes } => {
-                Some(format_file_uploaded(file_name, *size_bytes))
-            }
+            UploadPhase::UploadingFile {
+                file_name,
+                size_bytes,
+            } => Some(format_uploading_file(file_name, *size_bytes)),
+            UploadPhase::UploadingChunk {
+                current_chunk,
+                total_chunks,
+                bytes_sent,
+                total_bytes,
+            } => Some(format_uploading_chunk(
+                *current_chunk,
+                *total_chunks,
+                *bytes_sent,
+                *total_bytes,
+            )),
+            UploadPhase::FileUploaded {
+                file_name,
+                size_bytes,
+            } => Some(format_file_uploaded(file_name, *size_bytes)),
             UploadPhase::WaitingForAsset { elapsed_secs, .. } => {
                 format_waiting_for_asset(*elapsed_secs)
             }
-            UploadPhase::Completed { asset_id } => {
-                Some(format_completed(asset_id))
-            }
+            UploadPhase::Completed { asset_id } => Some(format_completed(asset_id)),
         }
     }
 }
@@ -271,7 +278,7 @@ fn format_uploading_chunk(
     let total_mb = total_bytes as f64 / BYTES_PER_MB;
     let percentage = (bytes_sent as f64 / total_bytes as f64 * 100.0) as u8;
     let precision = APP_CONFIG.presentation.size_display_precision;
-    
+
     DisplayProgress::new(
         format!(
             "Uploading chunk {}/{} ({:.prec$} MB / {:.prec$} MB, {}%)",
@@ -302,18 +309,18 @@ fn format_file_uploaded(file_name: &str, size_bytes: u64) -> DisplayProgress {
 }
 
 /// アセット待機中の進捗表示
-/// 
+///
 /// 設定された間隔（progress_update_interval_secs）ごとにのみ更新を表示し、
 /// それ以外は`None`を返すことで過度な更新を抑制します。
 fn format_waiting_for_asset(elapsed_secs: u64) -> Option<DisplayProgress> {
     let update_interval = APP_CONFIG.presentation.progress_update_interval_secs;
-    
+
     if elapsed_secs == 0 {
         Some(DisplayProgress::new(
             "Waiting for asset creation...".to_string(),
             ProgressCategory::Processing,
         ))
-    } else if elapsed_secs % update_interval == 0 {
+    } else if elapsed_secs.is_multiple_of(update_interval) {
         Some(DisplayProgress::new(
             format!("Still waiting... ({}s elapsed)", elapsed_secs),
             ProgressCategory::Processing,
@@ -337,10 +344,8 @@ mod tests {
 
     #[test]
     fn test_display_progress_creation() {
-        let progress = DisplayProgress::new(
-            "Test message".to_string(),
-            ProgressCategory::Validation,
-        );
+        let progress =
+            DisplayProgress::new("Test message".to_string(), ProgressCategory::Validation);
 
         assert_eq!(progress.message, "Test message");
         assert_eq!(progress.category, ProgressCategory::Validation);
@@ -349,11 +354,8 @@ mod tests {
 
     #[test]
     fn test_display_progress_with_details() {
-        let progress = DisplayProgress::new(
-            "Test message".to_string(),
-            ProgressCategory::Upload,
-        )
-        .with_details("Additional info".to_string());
+        let progress = DisplayProgress::new("Test message".to_string(), ProgressCategory::Upload)
+            .with_details("Additional info".to_string());
 
         assert_eq!(progress.details, Some("Additional info".to_string()));
     }
@@ -364,7 +366,8 @@ mod tests {
             file_path: "/path/to/file.mp4".to_string(),
         });
 
-        let display_progress = domain_progress.to_display()
+        let display_progress = domain_progress
+            .to_display()
             .expect("update should be displayed");
 
         assert_eq!(
@@ -382,7 +385,8 @@ mod tests {
             format: "mp4".to_string(),
         });
 
-        let display_progress = domain_progress.to_display()
+        let display_progress = domain_progress
+            .to_display()
             .expect("update should be displayed");
 
         assert!(display_progress.message.contains("video.mp4"));
@@ -397,7 +401,8 @@ mod tests {
             elapsed_secs: 0,
         });
 
-        let display_progress = domain_progress.to_display()
+        let display_progress = domain_progress
+            .to_display()
             .expect("update should be displayed");
 
         assert_eq!(display_progress.message, "Waiting for asset creation...");
@@ -411,7 +416,8 @@ mod tests {
             elapsed_secs: 20,
         });
 
-        let display_progress = domain_progress.to_display()
+        let display_progress = domain_progress
+            .to_display()
             .expect("update should be displayed");
 
         assert_eq!(display_progress.message, "Still waiting... (20s elapsed)");
@@ -429,7 +435,10 @@ mod tests {
         let display_progress = domain_progress.to_display();
 
         // None（表示抑制）が返されることを確認
-        assert!(display_progress.is_none(), "Updates under configured interval should be suppressed");
+        assert!(
+            display_progress.is_none(),
+            "Updates under configured interval should be suppressed"
+        );
     }
 
     #[test]
@@ -438,7 +447,8 @@ mod tests {
             asset_id: "asset_123".to_string(),
         });
 
-        let display_progress = domain_progress.to_display()
+        let display_progress = domain_progress
+            .to_display()
             .expect("update should be displayed");
 
         assert_eq!(display_progress.message, "Asset created: asset_123");

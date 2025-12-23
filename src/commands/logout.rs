@@ -11,25 +11,26 @@ use anyhow::{Context, Result};
 /// 成功時はOk(CommandResult)、失敗時はエラー
 pub async fn execute() -> Result<CommandResult> {
     // UserConfigをロード
-    let mut config = UserConfig::load()
-        .context("Failed to load configuration file")?;
+    let mut config = UserConfig::load().context("Failed to load configuration file")?;
 
     // 認証情報が存在するか確認
     let was_logged_in = config.has_auth();
-    
+
     if !was_logged_in {
-        return Ok(CommandResult::Logout(LogoutResult { was_logged_in: false }));
+        return Ok(CommandResult::Logout(LogoutResult {
+            was_logged_in: false,
+        }));
     }
 
     // 認証情報をクリア
     config.clear_auth();
 
     // 設定を保存
-    config
-        .save()
-        .context("Failed to save configuration file")?;
+    config.save().context("Failed to save configuration file")?;
 
-    Ok(CommandResult::Logout(LogoutResult { was_logged_in: true }))
+    Ok(CommandResult::Logout(LogoutResult {
+        was_logged_in: true,
+    }))
 }
 
 #[cfg(test)]

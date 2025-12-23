@@ -45,14 +45,10 @@ impl ApiClient {
     /// # Arguments
     /// * `endpoint` - エンドポイントパス（例: "/video/v1/assets"）
     /// * `auth_header` - HTTP Basic認証ヘッダー（オプション）
-    pub async fn get(
-        &self,
-        endpoint: &str,
-        auth_header: Option<&str>,
-    ) -> ApiResult<Response> {
+    pub async fn get(&self, endpoint: &str, auth_header: Option<&str>) -> ApiResult<Response> {
         let url = self.build_url(endpoint);
         let request = self.build_request(self.client.get(&url), auth_header);
-        
+
         Self::send_with_error_handling(request, endpoint, "GET").await
     }
 
@@ -70,7 +66,7 @@ impl ApiClient {
     ) -> ApiResult<Response> {
         let url = self.build_url(endpoint);
         let request = self.build_request(self.client.post(&url).json(body), auth_header);
-        
+
         Self::send_with_error_handling(request, endpoint, "POST").await
     }
 
@@ -113,14 +109,10 @@ impl ApiClient {
     /// # Arguments
     /// * `endpoint` - エンドポイントパス（例: "/video/v1/assets/{ASSET_ID}"）
     /// * `auth_header` - HTTP Basic認証ヘッダー（オプション）
-    pub async fn delete(
-        &self,
-        endpoint: &str,
-        auth_header: Option<&str>,
-    ) -> ApiResult<Response> {
+    pub async fn delete(&self, endpoint: &str, auth_header: Option<&str>) -> ApiResult<Response> {
         let url = self.build_url(endpoint);
         let request = self.build_request(self.client.delete(&url), auth_header);
-        
+
         Self::send_with_error_handling(request, endpoint, "DELETE").await
     }
 
@@ -151,7 +143,10 @@ impl ApiClient {
             if e.is_timeout() {
                 InfraError::timeout(format!("{} {}", method, endpoint))
             } else if e.is_connect() {
-                InfraError::network(format!("Connection failed for {} {}: {}", method, endpoint, e))
+                InfraError::network(format!(
+                    "Connection failed for {} {}: {}",
+                    method, endpoint, e
+                ))
             } else {
                 InfraError::network(format!("Request failed for {} {}: {}", method, endpoint, e))
             }
@@ -163,10 +158,7 @@ impl ApiClient {
     /// # Arguments
     /// * `response` - HTTPレスポンス
     /// * `endpoint` - エンドポイント名（エラーメッセージ用）
-    pub async fn check_response(
-        response: Response,
-        endpoint: &str,
-    ) -> ApiResult<Response> {
+    pub async fn check_response(response: Response, endpoint: &str) -> ApiResult<Response> {
         let status = response.status();
 
         if status.is_success() {
@@ -183,12 +175,11 @@ impl ApiClient {
     }
 
     /// JSONレスポンスをデシリアライズ
-    pub async fn parse_json<T: serde::de::DeserializeOwned>(
-        response: Response,
-    ) -> ApiResult<T> {
-        response.json().await.map_err(|e| {
-            InfraError::network(format!("Failed to parse JSON response: {}", e))
-        })
+    pub async fn parse_json<T: serde::de::DeserializeOwned>(response: Response) -> ApiResult<T> {
+        response
+            .json()
+            .await
+            .map_err(|e| InfraError::network(format!("Failed to parse JSON response: {}", e)))
     }
 }
 

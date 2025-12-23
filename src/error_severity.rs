@@ -15,6 +15,7 @@ use std::fmt;
 /// **設計原則**: このモジュールは「プレゼンテーション層の関心」を表現し、
 /// 他の層から独立して存在する。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[allow(clippy::enum_variant_names)]
 pub enum ErrorSeverity {
     /// ユーザーの入力エラー
     ///

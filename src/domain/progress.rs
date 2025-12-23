@@ -1,10 +1,10 @@
+use serde::Serialize;
 /// ドメイン層: アップロード進捗イベント定義
 ///
 /// アップロード処理の各段階をビジネスロジックのイベントとして表現します。
 /// プレゼンテーション層はこれらのイベントを受け取り、
 /// 人間向けの進捗表示や機械向けの制御に使用します。
 use std::time::SystemTime;
-use serde::Serialize;
 
 /// アップロード処理の各段階を表すイベント
 ///
@@ -17,9 +17,7 @@ use serde::Serialize;
 #[serde(tag = "phase", rename_all = "snake_case")]
 pub enum UploadPhase {
     /// ファイル検証開始
-    ValidatingFile {
-        file_path: String,
-    },
+    ValidatingFile { file_path: String },
 
     /// ファイル検証完了
     FileValidated {
@@ -29,20 +27,13 @@ pub enum UploadPhase {
     },
 
     /// Direct Upload URL作成中
-    CreatingDirectUpload {
-        file_name: String,
-    },
+    CreatingDirectUpload { file_name: String },
 
     /// Direct Upload作成完了
-    DirectUploadCreated {
-        upload_id: String,
-    },
+    DirectUploadCreated { upload_id: String },
 
     /// ファイルアップロード開始
-    UploadingFile {
-        file_name: String,
-        size_bytes: u64,
-    },
+    UploadingFile { file_name: String, size_bytes: u64 },
 
     /// チャンクアップロード中
     UploadingChunk {
@@ -53,10 +44,7 @@ pub enum UploadPhase {
     },
 
     /// ファイルアップロード完了
-    FileUploaded {
-        file_name: String,
-        size_bytes: u64,
-    },
+    FileUploaded { file_name: String, size_bytes: u64 },
 
     /// アセット作成完了を待機中
     WaitingForAsset {
@@ -66,9 +54,7 @@ pub enum UploadPhase {
     },
 
     /// アップロード処理完了
-    Completed {
-        asset_id: String,
-    },
+    Completed { asset_id: String },
 }
 
 /// アップロード進捗情報

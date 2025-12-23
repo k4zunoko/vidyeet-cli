@@ -31,7 +31,8 @@ pub async fn execute() -> Result<CommandResult> {
         .context("Failed to create API client")?;
 
     // アセット一覧を取得
-    let assets = fetch_all_assets(&client, &auth_manager).await
+    let assets = fetch_all_assets(&client, &auth_manager)
+        .await
         .context("Failed to fetch assets list")?;
 
     // 動画情報のリストを構築
@@ -40,9 +41,9 @@ pub async fn execute() -> Result<CommandResult> {
         .into_iter()
         .map(|asset| {
             let playback_id = asset.playback_ids.first().map(|p| p.id.clone());
-            let hls_url = playback_id.as_ref().map(|id| {
-                format!("https://stream.mux.com/{}.m3u8", id)
-            });
+            let hls_url = playback_id
+                .as_ref()
+                .map(|id| format!("https://stream.mux.com/{}.m3u8", id));
             // AssetDataのget_mp4_playback_url()を使用して統一的にMP4 URLを取得
             let mp4_url = asset.get_mp4_playback_url();
 

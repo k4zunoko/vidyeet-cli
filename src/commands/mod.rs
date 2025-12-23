@@ -1,3 +1,4 @@
+pub mod delete;
 pub mod help;
 pub mod list;
 pub mod login;

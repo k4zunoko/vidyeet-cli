@@ -2,7 +2,6 @@
 ///
 /// ビルド時にコンパイル時定数として定義される静的設定を管理します。
 /// これらの設定は実行時には変更できません。
-
 /// アプリケーション全体の設定
 #[derive(Debug, Clone, Copy)]
 pub struct AppConfig {
@@ -81,7 +80,7 @@ impl AppConfig {
                 backoff_base_ms: 1000, // 1秒
             },
             presentation: PresentationConfig {
-                size_display_precision: 2, // 「10.00 MB」形式
+                size_display_precision: 2,         // 「10.00 MB」形式
                 progress_update_interval_secs: 10, // 10秒ごとに更新
             },
         }
@@ -154,7 +153,7 @@ mod tests {
     fn test_get_content_type() {
         // Content-Type変換が正しく動作することを確認
         let upload_config = &APP_CONFIG.upload;
-        
+
         assert_eq!(upload_config.get_content_type("mp4"), "video/mp4");
         assert_eq!(upload_config.get_content_type("mov"), "video/quicktime");
         assert_eq!(upload_config.get_content_type("avi"), "video/x-msvideo");
@@ -162,9 +161,15 @@ mod tests {
         assert_eq!(upload_config.get_content_type("flv"), "video/x-flv");
         assert_eq!(upload_config.get_content_type("mkv"), "video/x-matroska");
         assert_eq!(upload_config.get_content_type("webm"), "video/webm");
-        
+
         // サポートされていない拡張子
-        assert_eq!(upload_config.get_content_type("unknown"), "application/octet-stream");
-        assert_eq!(upload_config.get_content_type("txt"), "application/octet-stream");
+        assert_eq!(
+            upload_config.get_content_type("unknown"),
+            "application/octet-stream"
+        );
+        assert_eq!(
+            upload_config.get_content_type("txt"),
+            "application/octet-stream"
+        );
     }
 }

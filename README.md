@@ -108,7 +108,40 @@ vidyeet --machine upload video.mp4 | ConvertFrom-Json
 }
 ```
 
-### 3. ログアウト
+### 3. 動画リストを取得
+
+アップロード済みの動画一覧を表示します。
+
+```powershell
+vidyeet list
+```
+
+### 4. 動画を削除
+
+指定したアセットIDの動画を削除します。
+
+```powershell
+vidyeet delete <asset_id>
+```
+
+**確認プロンプト:**
+
+```
+⚠️  WARNING: You are about to delete the following asset:
+   Asset ID: asset_abc123xyz
+
+This action cannot be undone. All video data will be permanently deleted.
+
+Type 'yes' to confirm deletion: 
+```
+
+**強制削除（確認をスキップ）:**
+
+```powershell
+vidyeet delete <asset_id> --force
+```
+
+### 5. ログアウト
 
 認証情報を削除します。
 
@@ -116,7 +149,15 @@ vidyeet --machine upload video.mp4 | ConvertFrom-Json
 vidyeet logout
 ```
 
-### 4. 機械可読出力（スクリプト向け）
+### 6. ステータス確認
+
+認証状態を確認します。
+
+```powershell
+vidyeet status
+```
+
+### 7. 機械可読出力（スクリプト向け）
 
 `--machine`フラグを使用すると、JSON形式で結果を出力します。
 
@@ -124,11 +165,12 @@ vidyeet logout
 vidyeet --machine upload video.mp4
 vidyeet --machine status
 vidyeet --machine list
+vidyeet --machine delete <asset_id> --force
 ```
 
 **注意**: `--machine`はグローバルフラグのため、コマンド名の前に指定します。
 
-### 5. ヘルプ
+### 8. ヘルプ
 
 ```powershell
 vidyeet help

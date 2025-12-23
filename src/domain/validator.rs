@@ -42,8 +42,7 @@ pub fn validate_upload_file(file_path: &str) -> ValidationResult<FileValidation>
     }
 
     // メタデータ取得
-    let metadata = std::fs::metadata(path)
-        .map_err(|_| DomainError::file_not_found(file_path))?;
+    let metadata = std::fs::metadata(path).map_err(|_| DomainError::file_not_found(file_path))?;
 
     // ディレクトリチェック
     if metadata.is_dir() {
@@ -93,11 +92,7 @@ fn extract_extension(
     path.extension()
         .and_then(|ext| ext.to_str())
         .map(|s| s.to_lowercase())
-        .ok_or_else(|| DomainError::invalid_format(
-            file_path,
-            supported_formats,
-            "no extension",
-        ))
+        .ok_or_else(|| DomainError::invalid_format(file_path, supported_formats, "no extension"))
 }
 
 #[cfg(test)]
