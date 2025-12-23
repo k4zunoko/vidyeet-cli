@@ -116,7 +116,40 @@ vidyeet --machine upload video.mp4 | ConvertFrom-Json
 vidyeet list
 ```
 
-### 4. 動画を削除
+### 4. 動画の詳細を表示
+
+指定したアセットIDの詳細情報を表示します。
+
+```powershell
+vidyeet show <asset_id>
+```
+
+**表示される情報:**
+
+```
+Asset Details:
+==============
+Asset ID:       lJ4bGGsp7ZlPf02nMg015W02iHQLN9XnuuLRBsPS00xqd68
+Status:         ready
+Duration:       0:24 (23.86s)
+Aspect Ratio:   16:9
+Video Quality:  basic
+Created At:     2021-01-05 12:46:08 +09:00
+
+Playback Information:
+--------------------
+Playback ID #1: vAFLI2eKFFicXX00iHBS2vqt5JjJGg5HV6fQ4Xijgt1I
+  Policy:       public
+HLS URL:        https://stream.mux.com/vAFLI2eKFFicXX00iHBS2vqt5JjJGg5HV6fQ4Xijgt1I.m3u8
+MP4 URL:        https://stream.mux.com/vAFLI2eKFFicXX00iHBS2vqt5JjJGg5HV6fQ4Xijgt1I/high.mp4
+
+Tracks:
+-------
+Track #1: video (duration: 23.82s)
+Track #2: audio (duration: 23.82s)
+```
+
+### 5. 動画を削除
 
 指定したアセットIDの動画を削除します。
 
@@ -141,7 +174,7 @@ Type 'yes' to confirm deletion:
 vidyeet delete <asset_id> --force
 ```
 
-### 5. ログアウト
+### 6. ログアウト
 
 認証情報を削除します。
 
@@ -149,7 +182,7 @@ vidyeet delete <asset_id> --force
 vidyeet logout
 ```
 
-### 6. ステータス確認
+### 7. ステータス確認
 
 認証状態を確認します。
 
@@ -157,7 +190,7 @@ vidyeet logout
 vidyeet status
 ```
 
-### 7. 機械可読出力（スクリプト向け）
+### 8. 機械可読出力（スクリプト向け）
 
 `--machine`フラグを使用すると、JSON形式で結果を出力します。
 
@@ -165,12 +198,13 @@ vidyeet status
 vidyeet --machine upload video.mp4
 vidyeet --machine status
 vidyeet --machine list
+vidyeet --machine show <asset_id>
 vidyeet --machine delete <asset_id> --force
 ```
 
 **注意**: `--machine`はグローバルフラグのため、コマンド名の前に指定します。
 
-### 8. ヘルプ
+### 9. ヘルプ
 
 ```powershell
 vidyeet help
