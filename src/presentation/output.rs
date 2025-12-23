@@ -321,29 +321,50 @@ fn output_machine_readable(result: &CommandResult) -> Result<()> {
             })
         }
         CommandResult::List(r) => {
-            serde_json::json!({
-                "success": true,
-                "command": "list",
-                "videos": r.videos,
-                "total_count": r.total_count
-            })
+            // raw_assetsがある場合（--machine フラグ時）は完全データを出力
+            if let Some(raw_assets) = &r.raw_assets {
+                serde_json::json!({
+                    "success": true,
+                    "command": "list",
+                    "data": raw_assets,
+                    "total_count": r.total_count
+                })
+            } else {
+                // 簡略版を出力（人間向けの互換性維持）
+                serde_json::json!({
+                    "success": true,
+                    "command": "list",
+                    "videos": r.videos,
+                    "total_count": r.total_count
+                })
+            }
         }
         CommandResult::Show(r) => {
-            serde_json::json!({
-                "success": true,
-                "command": "show",
-                "asset_id": r.asset_id,
-                "status": r.status,
-                "duration": r.duration,
-                "aspect_ratio": r.aspect_ratio,
-                "video_quality": r.video_quality,
-                "created_at": r.created_at,
-                "playback_ids": r.playback_ids,
-                "hls_url": r.hls_url,
-                "mp4_url": r.mp4_url,
-                "tracks": r.tracks,
-                "static_renditions": r.static_renditions
-            })
+            // raw_assetがある場合は完全データを出力
+            if let Some(raw_asset) = &r.raw_asset {
+                serde_json::json!({
+                    "success": true,
+                    "command": "show",
+                    "data": raw_asset
+                })
+            } else {
+                // 簡略版を出力（互換性維持）
+                serde_json::json!({
+                    "success": true,
+                    "command": "show",
+                    "asset_id": r.asset_id,
+                    "status": r.status,
+                    "duration": r.duration,
+                    "aspect_ratio": r.aspect_ratio,
+                    "video_quality": r.video_quality,
+                    "created_at": r.created_at,
+                    "playback_ids": r.playback_ids,
+                    "hls_url": r.hls_url,
+                    "mp4_url": r.mp4_url,
+                    "tracks": r.tracks,
+                    "static_renditions": r.static_renditions
+                })
+            }
         }
         CommandResult::Upload(r) => {
             serde_json::json!({
@@ -423,6 +444,7 @@ mod tests {
         let result = CommandResult::List(ListResult {
             videos: vec![],
             total_count: 0,
+            raw_assets: None,
         });
 
         let output = output_machine_readable(&result);

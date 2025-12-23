@@ -47,7 +47,7 @@ pub async fn parse_args(args: &[String]) -> Result<()> {
         "status" => commands::status::execute()
             .await
             .context("Status command failed")?,
-        "list" => commands::list::execute()
+        "list" => commands::list::execute(machine_output)
             .await
             .context("List command failed")?,
         "show" => {

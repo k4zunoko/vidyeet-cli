@@ -120,6 +120,10 @@ pub struct AssetData {
     /// 作成日時（Unix timestamp）
     pub created_at: String,
 
+    /// 更新日時（Unix timestamp）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<String>,
+
     /// アスペクト比
     #[serde(skip_serializing_if = "Option::is_none")]
     pub aspect_ratio: Option<String>,
@@ -127,6 +131,38 @@ pub struct AssetData {
     /// ビデオ品質
     #[serde(skip_serializing_if = "Option::is_none")]
     pub video_quality: Option<String>,
+
+    /// 最大保存解像度（deprecated: resolution_tierを使用）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_stored_resolution: Option<String>,
+
+    /// 解像度ティア（1080p, 720pなど）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resolution_tier: Option<String>,
+
+    /// 最大保存フレームレート
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_stored_frame_rate: Option<f64>,
+
+    /// 最大解像度ティア
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_resolution_tier: Option<String>,
+
+    /// マスターファイルアクセス（none, temporaryなど）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub master_access: Option<String>,
+
+    /// エンコーディングティア（baseline, smartなど）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub encoding_tier: Option<String>,
+
+    /// カスタムメタデータ（最大255文字）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub passthrough: Option<String>,
+
+    /// MP4サポート（deprecated）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mp4_support: Option<String>,
 
     /// Static Renditions（MP4など）
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -141,11 +177,37 @@ pub struct PlaybackId {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Track {
+    /// トラックタイプ（video, audioなど）
     #[serde(rename = "type")]
     pub track_type: String,
 
+    /// トラックID
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+
+    /// トラック時間（秒）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub duration: Option<f64>,
+
+    /// 最大幅（videoトラックのみ）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_width: Option<u32>,
+
+    /// 最大高さ（videoトラックのみ）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_height: Option<u32>,
+
+    /// 最大フレームレート（videoトラックのみ）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_frame_rate: Option<f64>,
+
+    /// 最大チャンネル数（audioトラックのみ）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_channels: Option<u32>,
+
+    /// 最大チャンネルレイアウト（audioトラックのみ、例: stereo）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_channel_layout: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -279,8 +341,17 @@ mod tests {
                 tracks: None,
                 duration: Some(120.5),
                 created_at: "1609869152".to_string(),
+                updated_at: None,
                 aspect_ratio: Some("16:9".to_string()),
                 video_quality: Some("basic".to_string()),
+                max_stored_resolution: None,
+                resolution_tier: None,
+                max_stored_frame_rate: None,
+                max_resolution_tier: None,
+                master_access: None,
+                encoding_tier: None,
+                passthrough: None,
+                mp4_support: None,
                 static_renditions: None,
             },
         };
@@ -304,8 +375,17 @@ mod tests {
                 tracks: None,
                 duration: Some(60.0),
                 created_at: "1609869152".to_string(),
+                updated_at: None,
                 aspect_ratio: Some("16:9".to_string()),
                 video_quality: Some("basic".to_string()),
+                max_stored_resolution: None,
+                resolution_tier: None,
+                max_stored_frame_rate: None,
+                max_resolution_tier: None,
+                master_access: None,
+                encoding_tier: None,
+                passthrough: None,
+                mp4_support: None,
                 static_renditions: Some(StaticRenditionsWrapper {
                     files: vec![StaticRendition {
                         id: "rendition_123".to_string(),
@@ -338,8 +418,17 @@ mod tests {
                 tracks: None,
                 duration: Some(60.0),
                 created_at: "1609869152".to_string(),
+                updated_at: None,
                 aspect_ratio: None,
                 video_quality: Some("basic".to_string()),
+                max_stored_resolution: None,
+                resolution_tier: None,
+                max_stored_frame_rate: None,
+                max_resolution_tier: None,
+                master_access: None,
+                encoding_tier: None,
+                passthrough: None,
+                mp4_support: None,
                 static_renditions: None,
             },
         };

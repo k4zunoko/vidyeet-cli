@@ -13,7 +13,7 @@ pub enum CommandResult {
     Upload(UploadResult),
     Status(StatusResult),
     List(ListResult),
-    Show(ShowResult),
+    Show(Box<ShowResult>),
     Delete(DeleteResult),
     Help,
 }
@@ -77,10 +77,13 @@ pub enum Mp4Status {
 /// リストコマンドの結果
 #[derive(Debug, Clone, Serialize)]
 pub struct ListResult {
-    /// 動画リスト
+    /// 動画リスト（人間向け簡略版）
     pub videos: Vec<VideoInfo>,
     /// 合計数
     pub total_count: usize,
+    /// 完全なAPIレスポンスデータ（機械向け、--machineフラグ時のみ）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub raw_assets: Option<Vec<crate::api::types::AssetData>>,
 }
 
 /// アセット詳細表示コマンドの結果
@@ -108,6 +111,9 @@ pub struct ShowResult {
     pub tracks: Option<Vec<crate::api::types::Track>>,
     /// Static Renditions（MP4など）
     pub static_renditions: Option<crate::api::types::StaticRenditionsWrapper>,
+    /// 完全なAPIレスポンスデータ（機械向け、--machineフラグ時のみ）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub raw_asset: Option<crate::api::types::AssetData>,
 }
 
 /// 削除コマンドの結果

@@ -51,9 +51,10 @@ pub async fn execute(asset_id: &str) -> Result<CommandResult> {
         mp4_url: asset.get_mp4_playback_url(),
         tracks: asset.data.tracks.clone(),
         static_renditions: asset.data.static_renditions.clone(),
+        raw_asset: Some(asset.data),
     };
 
-    Ok(CommandResult::Show(result))
+    Ok(CommandResult::Show(Box::new(result)))
 }
 
 /// Mux APIからアセット詳細を取得

@@ -9,13 +9,16 @@ use anyhow::{Context, Result};
 ///
 /// Mux APIから現在投稿中の動画のリストを取得します。
 ///
+/// # 引数
+/// * `machine_output` - 機械可読出力フラグ（trueの場合、完全なAPIレスポンスを含む）
+///
 /// # 戻り値
 /// 成功・失敗を示すResult<CommandResult>
 ///
 /// # エラー
 /// アプリケーション層としてanyhow::Resultを返し、
 /// 設定・認証・インフラ層のエラーを集約します。
-pub async fn execute() -> Result<CommandResult> {
+pub async fn execute(machine_output: bool) -> Result<CommandResult> {
     // ユーザー設定を読み込み
     let user_config = UserConfig::load()
         .context("Failed to load user configuration. Please check your config.toml file.")?;
@@ -34,6 +37,13 @@ pub async fn execute() -> Result<CommandResult> {
     let assets = fetch_all_assets(&client, &auth_manager)
         .await
         .context("Failed to fetch assets list")?;
+
+    // 機械向け出力用に完全データをクローン（必要な場合のみ）
+    let raw_assets = if machine_output {
+        Some(assets.data.clone())
+    } else {
+        None
+    };
 
     // 動画情報のリストを構築
     let videos: Vec<VideoInfo> = assets
@@ -65,6 +75,7 @@ pub async fn execute() -> Result<CommandResult> {
     Ok(CommandResult::List(ListResult {
         videos,
         total_count,
+        raw_assets,
     }))
 }
 
