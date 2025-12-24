@@ -356,6 +356,52 @@ main.rs → cli.rs → commands/* → {domain, config, api}
 6. HLS/MP4 URL取得
 ```
 
+### 機械可読出力の仕様
+
+`--machine`フラグを使用すると、JSON形式で構造化されたデータを標準出力に出力します。
+
+**出力形式の違い:**
+
+- **通常実行**: 人間が読みやすい簡略版のJSON（`videos`/`playback_ids`等）
+- **--machineフラグ**: Mux APIの完全なレスポンスデータを含む（`raw_assets`/`raw_asset`フィールド）
+
+**対応コマンド:**
+
+| コマンド | 通常出力 | --machine出力 |
+|---------|---------|--------------|
+| `list` | `videos`配列（簡略版） | `raw_assets`配列（完全なAssetData） |
+| `show` | 基本フィールドのみ | `raw_asset`オブジェクト（完全なAssetData） |
+| `upload` | 成功メッセージとURL | 同左（変更なし） |
+| `delete` | asset_id | 同左（変更なし） |
+
+**raw_assets/raw_assetに含まれる追加フィールド例:**
+
+- `resolution_tier`: 解像度ティア（1080p, 720pなど）
+- `encoding_tier`: エンコーディングティア（baseline, smartなど）
+- `max_stored_resolution`: 最大保存解像度
+- `max_stored_frame_rate`: 最大保存フレームレート
+- `tracks[].id`: トラックID
+- `tracks[].max_width`: 最大幅
+- `tracks[].max_height`: 最大高さ
+- その他、Mux API公式仕様の全フィールド
+
+**使用例:**
+
+```bash
+# 通常の人間向け出力
+vidyeet list
+
+# スクリプト向けの完全なAPIデータ取得
+vidyeet --machine list | jq '.raw_assets[0].resolution_tier'
+vidyeet --machine show <asset_id> | jq '.raw_asset.encoding_tier'
+```
+
+**メモリ使用量の考慮:**
+
+`--machine`フラグ使用時は、完全なAPIレスポンスデータをメモリに保持するため、通常実行より約50-200KB多く消費します（100動画の場合）。CLIツールの特性上、一度実行して終了するため、実用上の問題はありません。
+
+---
+
 ### Mux API仕様
 
 詳細は [Mux API Reference](https://www.mux.com/docs/api-reference/video/assets) を参照。
