@@ -17,8 +17,11 @@ use std::env;
 async fn main() {
     let args: Vec<String> = env::args().collect();
 
+    // --machine フラグのチェック（エラーハンドリングにも必要）
+    let machine_output = args.len() > 1 && args[1] == "--machine";
+
     if let Err(e) = run(&args).await {
-        handle_error(e);
+        handle_error(e, machine_output);
     }
 }
 
@@ -35,25 +38,39 @@ async fn run(args: &[String]) -> Result<()> {
 ///
 /// エラーチェーンを一度走査して、最初にヒットしたアプリケーション定義エラーから
 /// 終了コードとヒントを取得する。
-fn handle_error(error: anyhow::Error) {
-    // エラーメッセージのヘッダー
-    eprintln!("Error: {}", error);
-
-    // エラーチェーンを辿って詳細を表示
-    let chain: Vec<_> = error.chain().skip(1).collect();
-    if !chain.is_empty() {
-        eprintln!("\nCaused by:");
-        for (i, cause) in chain.iter().enumerate() {
-            eprintln!("  {}: {}", i + 1, cause);
-        }
-    }
-
+fn handle_error(error: anyhow::Error, machine_output: bool) {
     // エラーチェーンから終了コードとヒントを同時取得
     let (exit_code, hint) = extract_error_info(&error);
 
-    // ユーザー向けのヒントを表示
-    if let Some(hint_text) = hint {
-        eprintln!("\nHint: {}", hint_text);
+    if machine_output {
+        // 機械可読なJSON出力
+        let error_json = serde_json::json!({
+            "success": false,
+            "error": {
+                "message": error.to_string(),
+                "exit_code": exit_code,
+                "hint": hint,
+            }
+        });
+        println!("{}", error_json);
+    } else {
+        // 人間可読な出力（従来の動作）
+        // エラーメッセージのヘッダー
+        eprintln!("Error: {}", error);
+
+        // エラーチェーンを辿って詳細を表示
+        let chain: Vec<_> = error.chain().skip(1).collect();
+        if !chain.is_empty() {
+            eprintln!("\nCaused by:");
+            for (i, cause) in chain.iter().enumerate() {
+                eprintln!("  {}: {}", i + 1, cause);
+            }
+        }
+
+        // ユーザー向けのヒントを表示
+        if let Some(hint_text) = hint {
+            eprintln!("\nHint: {}", hint_text);
+        }
     }
 
     // 適切な終了コードで終了
