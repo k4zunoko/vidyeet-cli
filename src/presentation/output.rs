@@ -15,9 +15,13 @@ Usage:
 
 Global Flags:
   --machine        - Output machine-readable JSON to stdout (for scripting)
+                     Works for both success and error cases
 
 Available commands:
-  login            - Login to Mux Video (credentials entered interactively)
+  login [--stdin]  - Login to Mux Video
+                     Without --stdin: Interactive credential input (default)
+                     With --stdin: Read credentials from standard input
+                                   Format: line 1 = Token ID, line 2 = Token Secret
   logout           - Logout from Mux Video
   status           - Check authentication status
   list             - List all uploaded videos
@@ -29,6 +33,16 @@ Available commands:
                    - Upload a video to Mux Video
                      --progress: Show upload progress (required for progress output)
   help             - Display this help message
+
+Machine-Readable Output:
+  --machine status               - JSON output for success
+  --machine list                 - JSON output with error handling
+  echo \"id\nkey\" | --machine login --stdin
+                                 - Automated login with JSON response
+
+Error Output:
+  Normal mode:   Human-readable error messages to stderr
+  --machine:     JSON error object with exit_code and hint fields
 
 Progress Output:
   upload --progress              - Show human-readable progress to stderr

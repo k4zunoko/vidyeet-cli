@@ -45,6 +45,8 @@ cargo build --release
 
 Muxダッシュボードで取得したAccess Token IDとSecretを使って認証します。
 
+#### 対話形式ログイン（推奨）
+
 ```powershell
 vidyeet login
 ```
@@ -52,11 +54,39 @@ vidyeet login
 対話形式で認証情報を入力します：
 
 ```
-Enter your Mux Access Token ID: abc123xyz
-Enter your Mux Access Token Secret: ****
-Authenticating...
-✓ Login successful!
+Logging in to Mux Video...
+
+Please enter your Mux Access Token credentials.
+You can find them at: https://dashboard.mux.com/settings/access-tokens
+
+Access Token ID: abc123xyz
+Access Token Secret: ****
+
+Login successful.
+Authentication credentials have been saved.
 ```
+
+#### 標準入力からのログイン（CI/CD向け）
+
+機械的な処理やスクリプトから認証情報を供給する場合は `--stdin` オプションを使用します：
+
+```powershell
+# 環境変数から認証情報を供給
+echo "$env:MUX_TOKEN_ID`n$env:MUX_TOKEN_SECRET" | vidyeet login --stdin
+
+# ファイルから認証情報を読み込み
+Get-Content credentials.txt | vidyeet login --stdin
+```
+
+**credentials.txt の形式:**
+```
+your-token-id
+your-token-secret
+```
+
+**セキュリティ上の注意:**
+- `--stdin` を使用することで、認証情報がシェル履歴に記録されることを防げます
+- 認証情報は環境変数やファイルから読み込むことを推奨します
 
 **Access Tokenの取得方法:**
 1. [Mux Dashboard](https://dashboard.mux.com/)にログイン
@@ -192,17 +222,55 @@ vidyeet status
 
 ### 8. 機械可読出力（スクリプト向け）
 
-`--machine`フラグを使用すると、JSON形式で結果を出力します。
+`--machine`フラグを使用すると、JSON形式で結果を出力します。すべてのコマンドで成功時・失敗時ともにJSON形式で出力されます。
+
+#### 成功時の出力例
 
 ```powershell
-vidyeet --machine upload video.mp4
 vidyeet --machine status
-vidyeet --machine list
-vidyeet --machine show <asset_id>
-vidyeet --machine delete <asset_id> --force
 ```
 
-**注意**: `--machine`はグローバルフラグのため、コマンド名の前に指定します。
+```json
+{
+  "command": "status",
+  "is_authenticated": true,
+  "success": true,
+  "token_id": "abcd***1234"
+}
+```
+
+#### 失敗時の出力例
+
+```powershell
+vidyeet --machine list  # 未認証状態
+```
+
+```json
+{
+  "success": false,
+  "error": {
+    "message": "List command failed",
+    "exit_code": 2,
+    "hint": "Please run 'vidyeet login' to authenticate with api.video."
+  }
+}
+```
+
+#### 対応コマンド
+
+```powershell
+vidyeet --machine login --stdin    # 標準入力からログイン
+vidyeet --machine status           # ステータス確認
+vidyeet --machine list             # 動画一覧
+vidyeet --machine show <asset_id>  # 動画詳細
+vidyeet --machine upload video.mp4 # アップロード
+vidyeet --machine delete <asset_id> --force  # 削除
+```
+
+**注意**: 
+- `--machine`はグローバルフラグのため、コマンド名の前に指定します
+- エラー発生時も必ずJSON形式で出力されるため、スクリプトでのパースが容易です
+- 終了コード（exit_code）は標準エラー処理に従います（0: 成功, 1: ユーザーエラー, 2: 設定エラー, 3: システムエラー）
 
 ### 9. ヘルプ
 
