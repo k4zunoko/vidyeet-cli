@@ -1,6 +1,6 @@
 # vidyeet-cli
 
-**Mux Video対応動画アップロードCLIツール（Rust学習プロジェクト）**
+**Mux Video対応動画アップロードCLIツール**
 
 [![Rust](https://img.shields.io/badge/rust-2024%20edition-orange.svg)](https://www.rust-lang.org)
 
