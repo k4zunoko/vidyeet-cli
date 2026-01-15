@@ -48,19 +48,6 @@ vidyeet-cliは、エラーの種類に応じて以下の終了コードを返し
 | `2` | 設定エラー | 認証情報や設定の問題 | 未ログイン、認証情報が無効 |
 | `3` | システムエラー | ネットワークやAPI側の問題 | API接続失敗、タイムアウト |
 
-### 終了コードの活用例
-
-```powershell
-vidyeet --machine status
-if ($LASTEXITCODE -eq 0) {
-    Write-Host "認証済み"
-} elseif ($LASTEXITCODE -eq 2) {
-    Write-Host "未認証 - ログインが必要"
-} else {
-    Write-Host "エラーが発生しました"
-}
-```
-
 ---
 
 ## コマンドリファレンス
@@ -115,21 +102,6 @@ echo "$TOKEN_ID`n$TOKEN_SECRET" | vidyeet --machine login --stdin
 }
 ```
 
-#### 使用例（PowerShell）
-
-```powershell
-# 環境変数から認証
-$input = "$env:MUX_TOKEN_ID`n$env:MUX_TOKEN_SECRET"
-$result = $input | vidyeet --machine login --stdin | ConvertFrom-Json
-
-if ($result.success) {
-    Write-Host "ログイン成功: $($result.action)"
-} else {
-    Write-Error $result.error.message
-    exit $result.error.exit_code
-}
-```
-
 ---
 
 ### 2. status - ステータス確認
@@ -169,20 +141,6 @@ vidyeet --machine status
   "is_authenticated": false,
   "token_id": null
 }
-```
-
-#### 使用例（bash）
-
-```bash
-STATUS=$(vidyeet --machine status)
-IS_AUTH=$(echo $STATUS | jq -r '.is_authenticated')
-
-if [ "$IS_AUTH" = "true" ]; then
-    echo "認証済み"
-else
-    echo "未認証 - ログインしてください"
-    exit 1
-fi
 ```
 
 ---
@@ -271,39 +229,6 @@ vidyeet --machine upload <file_path> [--progress]
 | `waiting_for_asset` | アセット作成待機中 | `upload_id`, `elapsed_secs` |
 | `completed` | 処理完了 | `asset_id` |
 
-#### 使用例（PowerShell + 進捗処理）
-
-```powershell
-# 進捗をリアルタイム処理
-$lines = vidyeet --machine upload video.mp4 --progress
-
-foreach ($line in $lines) {
-    $json = $line | ConvertFrom-Json
-    
-    if ($json.success -ne $null) {
-        # 最終結果
-        Write-Host "アップロード完了: $($json.asset_id)"
-        Write-Host "HLS URL: $($json.hls_url)"
-    } elseif ($json.phase -eq "uploading_chunk") {
-        # 進捗表示
-        $percent = ($json.bytes_sent / $json.total_bytes) * 100
-        Write-Host "進捗: $($percent)% ($($json.current_chunk)/$($json.total_chunks))"
-    }
-}
-```
-
-#### 使用例（bash + jq）
-
-```bash
-# 進捗なしで結果のみ取得
-RESULT=$(vidyeet --machine upload video.mp4)
-ASSET_ID=$(echo $RESULT | jq -r '.asset_id')
-HLS_URL=$(echo $RESULT | jq -r '.hls_url')
-
-echo "Asset ID: $ASSET_ID"
-echo "Stream URL: $HLS_URL"
-```
-
 ---
 
 ### 4. list - 動画一覧取得
@@ -380,20 +305,6 @@ vidyeet --machine list
 | `data` | array | 完全なMux API Asset配列（[AssetData](#assetdata-構造)の配列） |
 | `total_count` | number | 動画の総数 |
 
-#### 使用例（PowerShell）
-
-```powershell
-$result = vidyeet --machine list | ConvertFrom-Json
-
-foreach ($asset in $result.data) {
-    Write-Host "Asset ID: $($asset.id)"
-    Write-Host "Status: $($asset.status)"
-    Write-Host "Duration: $($asset.duration)s"
-    Write-Host "Resolution: $($asset.resolution_tier)"
-    Write-Host "---"
-}
-```
-
 ---
 
 ### 5. show - 動画詳細表示
@@ -461,20 +372,6 @@ vidyeet --machine show <asset_id>
 | `command` | string | コマンド名（"show"） |
 | `data` | object | 完全なMux API Asset情報（[AssetData](#assetdata-構造)） |
 
-#### 使用例（bash + jq）
-
-```bash
-# 解像度情報の取得
-RESOLUTION=$(vidyeet --machine show asset_abc123 | jq -r '.data.resolution_tier')
-echo "解像度: $RESOLUTION"
-
-# ビデオトラックの幅と高さを取得
-VIDEO_TRACK=$(vidyeet --machine show asset_abc123 | jq '.data.tracks[] | select(.type == "video")')
-WIDTH=$(echo $VIDEO_TRACK | jq -r '.max_width')
-HEIGHT=$(echo $VIDEO_TRACK | jq -r '.max_height')
-echo "動画サイズ: ${WIDTH}x${HEIGHT}"
-```
-
 ---
 
 ### 6. delete - 動画削除
@@ -504,16 +401,6 @@ vidyeet --machine delete <asset_id> --force
 | `success` | boolean | 常に`true` |
 | `command` | string | コマンド名（"delete"） |
 | `asset_id` | string | 削除されたアセットID |
-
-#### 使用例（PowerShell）
-
-```powershell
-$result = vidyeet --machine delete asset_abc123 --force | ConvertFrom-Json
-
-if ($result.success) {
-    Write-Host "削除完了: $($result.asset_id)"
-}
-```
 
 ---
 
@@ -751,215 +638,6 @@ vidyeet --machine logout
 - ネットワーク接続エラー
 - APIサーバーがダウン
 - タイムアウト
-
-### エラーハンドリングのベストプラクティス
-
-#### PowerShellの例
-
-```powershell
-$result = vidyeet --machine upload video.mp4 | ConvertFrom-Json
-
-if (-not $result.success) {
-    Write-Error "エラー: $($result.error.message)"
-    
-    if ($result.error.hint) {
-        Write-Host "ヒント: $($result.error.hint)" -ForegroundColor Yellow
-    }
-    
-    switch ($result.error.exit_code) {
-        1 { Write-Host "ユーザーエラー - 入力を確認してください" }
-        2 { Write-Host "設定エラー - ログイン状態を確認してください" }
-        3 { Write-Host "システムエラー - 時間をおいて再試行してください" }
-    }
-    
-    exit $result.error.exit_code
-}
-
-# 成功時の処理
-Write-Host "アップロード成功: $($result.asset_id)"
-```
-
-#### bashの例
-
-```bash
-RESULT=$(vidyeet --machine upload video.mp4)
-EXIT_CODE=$?
-
-if [ $EXIT_CODE -ne 0 ]; then
-    ERROR_MSG=$(echo $RESULT | jq -r '.error.message')
-    ERROR_HINT=$(echo $RESULT | jq -r '.error.hint // "なし"')
-    
-    echo "エラー: $ERROR_MSG" >&2
-    echo "ヒント: $ERROR_HINT" >&2
-    
-    case $EXIT_CODE in
-        1) echo "ユーザーエラー" >&2 ;;
-        2) echo "設定エラー" >&2 ;;
-        3) echo "システムエラー" >&2 ;;
-    esac
-    
-    exit $EXIT_CODE
-fi
-
-# 成功時の処理
-ASSET_ID=$(echo $RESULT | jq -r '.asset_id')
-echo "アップロード成功: $ASSET_ID"
-```
-
----
-
-## 実用例
-
-### 1. CI/CDパイプラインでの動画アップロード
-
-```powershell
-# GitLab CI / GitHub Actions での使用例
-
-# 認証
-$credentials = "$env:MUX_TOKEN_ID`n$env:MUX_TOKEN_SECRET"
-$loginResult = $credentials | vidyeet --machine login --stdin | ConvertFrom-Json
-
-if (-not $loginResult.success) {
-    Write-Error "ログイン失敗"
-    exit 2
-}
-
-# 動画アップロード
-$uploadResult = vidyeet --machine upload $env:VIDEO_FILE | ConvertFrom-Json
-
-if (-not $uploadResult.success) {
-    Write-Error "アップロード失敗: $($uploadResult.error.message)"
-    exit $uploadResult.error.exit_code
-}
-
-# 結果を環境変数に保存（次のジョブで使用）
-Write-Output "ASSET_ID=$($uploadResult.asset_id)" >> $env:GITHUB_ENV
-Write-Output "HLS_URL=$($uploadResult.hls_url)" >> $env:GITHUB_ENV
-```
-
-### 2. バッチ処理での複数動画アップロード
-
-```powershell
-# 複数動画を順次アップロード
-$videoFiles = Get-ChildItem -Path ".\videos" -Filter "*.mp4"
-$results = @()
-
-foreach ($file in $videoFiles) {
-    Write-Host "アップロード中: $($file.Name)"
-    
-    $result = vidyeet --machine upload $file.FullName | ConvertFrom-Json
-    
-    if ($result.success) {
-        $results += [PSCustomObject]@{
-            FileName = $file.Name
-            AssetId = $result.asset_id
-            HlsUrl = $result.hls_url
-            Status = "成功"
-        }
-    } else {
-        $results += [PSCustomObject]@{
-            FileName = $file.Name
-            AssetId = "N/A"
-            HlsUrl = "N/A"
-            Status = "失敗: $($result.error.message)"
-        }
-    }
-}
-
-# 結果をCSVに出力
-$results | Export-Csv -Path "upload_results.csv" -NoTypeInformation -Encoding UTF8
-```
-
-### 3. 動画ライブラリの同期
-
-```bash
-#!/bin/bash
-# Mux上の動画一覧をローカルデータベースに同期
-
-# 動画一覧を取得
-ASSETS=$(vidyeet --machine list | jq -r '.data')
-
-# 各アセットを処理
-echo $ASSETS | jq -c '.[]' | while read -r asset; do
-    ASSET_ID=$(echo $asset | jq -r '.id')
-    STATUS=$(echo $asset | jq -r '.status')
-    DURATION=$(echo $asset | jq -r '.duration // 0')
-    RESOLUTION=$(echo $asset | jq -r '.resolution_tier // "unknown"')
-    CREATED=$(echo $asset | jq -r '.created_at')
-    
-    # データベースに挿入（例: PostgreSQL）
-    psql -d mydb -c "
-        INSERT INTO videos (asset_id, status, duration, resolution, created_at)
-        VALUES ('$ASSET_ID', '$STATUS', $DURATION, '$RESOLUTION', to_timestamp($CREATED))
-        ON CONFLICT (asset_id) DO UPDATE
-        SET status = EXCLUDED.status,
-            duration = EXCLUDED.duration,
-            resolution = EXCLUDED.resolution;
-    "
-done
-```
-
-### 4. 進捗をリアルタイムでWebhookに送信
-
-```powershell
-# アップロード進捗をWebhookに送信
-$webhookUrl = "https://api.example.com/webhook/upload-progress"
-
-vidyeet --machine upload large_video.mp4 --progress | ForEach-Object {
-    $json = $_ | ConvertFrom-Json
-    
-    # Webhookに送信
-    $body = @{
-        timestamp = (Get-Date).ToUniversalTime().ToString("o")
-        data = $json
-    } | ConvertTo-Json -Compress
-    
-    try {
-        Invoke-RestMethod -Uri $webhookUrl -Method Post -Body $body -ContentType "application/json"
-    } catch {
-        Write-Warning "Webhook送信失敗: $_"
-    }
-    
-    # 最終結果の場合
-    if ($json.success -ne $null) {
-        Write-Host "アップロード完了: $($json.asset_id)"
-    }
-}
-```
-
-### 5. 自動品質チェック
-
-```bash
-#!/bin/bash
-# アップロード後に動画品質をチェック
-
-# アップロード
-RESULT=$(vidyeet --machine upload video.mp4)
-ASSET_ID=$(echo $RESULT | jq -r '.asset_id')
-
-# 詳細情報を取得
-DETAILS=$(vidyeet --machine show $ASSET_ID)
-
-# 品質チェック
-RESOLUTION=$(echo $DETAILS | jq -r '.data.resolution_tier')
-DURATION=$(echo $DETAILS | jq -r '.data.duration')
-STATUS=$(echo $DETAILS | jq -r '.data.status')
-
-if [ "$STATUS" != "ready" ]; then
-    echo "エラー: 動画が準備できていません"
-    exit 1
-fi
-
-if [ "$RESOLUTION" != "1080p" ]; then
-    echo "警告: 解像度が1080pではありません（実際: $RESOLUTION）"
-fi
-
-if (( $(echo "$DURATION < 10" | bc -l) )); then
-    echo "警告: 動画が短すぎます（$DURATION秒）"
-fi
-
-echo "品質チェック完了"
-```
 
 ---
 
