@@ -124,7 +124,8 @@ pub async fn handle_upload_progress(
                 if machine_output {
                     // 機械可読JSON出力（stdout）
                     // JSONL形式（1行1JSON）で出力
-                    if let Ok(json) = serde_json::to_string(&progress) {
+                    // phaseフィールドを直接シリアライズすることで、二重ネストを回避
+                    if let Ok(json) = serde_json::to_string(&progress.phase) {
                         println!("{}", json);
                     }
                 } else {
