@@ -1,7 +1,20 @@
 # vidyeet-cli Machine API リファレンス
 
-**バージョン**: 1.0  
+**バージョン**: 1.1  
 **対象**: プログラムからvidyeet-cliを呼び出す開発者向け
+
+---
+
+## バージョン履歴
+
+### v1.1
+- **変更内容**: `uploading_file` フェーズに `total_chunks` フィールドを追加
+- **理由**: GUI実装でプログレスバーを準備する際に、総チャンク数を事前に把握できるようにするため
+- **互換性**: 非破壊的変更（フィールド追加のみ）。既存のパーサーは未知のフィールドを無視できます
+- **影響**: 厳密な型チェックを行っているクライアントは型定義の更新が必要
+
+### v1.0
+- 初版リリース
 
 ---
 
@@ -208,7 +221,7 @@ vidyeet --machine upload <file_path> [--progress]
 {"phase":"file_validated","file_name":"video.mp4","size_bytes":10485760,"format":"mp4"}
 {"phase":"creating_direct_upload","file_name":"video.mp4"}
 {"phase":"direct_upload_created","upload_id":"abc123"}
-{"phase":"uploading_file","file_name":"video.mp4","size_bytes":10485760}
+{"phase":"uploading_file","file_name":"video.mp4","size_bytes":10485760,"total_chunks":10}
 {"phase":"uploading_chunk","current_chunk":1,"total_chunks":10,"bytes_sent":1048576,"total_bytes":10485760}
 {"phase":"file_uploaded","file_name":"video.mp4","size_bytes":10485760}
 {"phase":"waiting_for_asset","upload_id":"abc123","elapsed_secs":5}
@@ -223,7 +236,7 @@ vidyeet --machine upload <file_path> [--progress]
 | `file_validated` | ファイル検証完了 | `file_name`, `size_bytes`, `format` |
 | `creating_direct_upload` | アップロードURL作成中 | `file_name` |
 | `direct_upload_created` | アップロードURL作成完了 | `upload_id` |
-| `uploading_file` | アップロード開始 | `file_name`, `size_bytes` |
+| `uploading_file` | アップロード開始 | `file_name`, `size_bytes`, `total_chunks` |
 | `uploading_chunk` | チャンクアップロード中 | `current_chunk`, `total_chunks`, `bytes_sent`, `total_bytes` |
 | `file_uploaded` | アップロード完了 | `file_name`, `size_bytes` |
 | `waiting_for_asset` | アセット作成待機中 | `upload_id`, `elapsed_secs` |

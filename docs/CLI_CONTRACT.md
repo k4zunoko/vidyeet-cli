@@ -575,7 +575,7 @@ Waiting for asset creation...
 {"phase":"file_validated","file_name":"video.mp4","size_bytes":10485760,"format":"mp4"}
 {"phase":"creating_direct_upload","file_name":"video.mp4"}
 {"phase":"direct_upload_created","upload_id":"abc123"}
-{"phase":"uploading_file","file_name":"video.mp4","size_bytes":10485760}
+{"phase":"uploading_file","file_name":"video.mp4","size_bytes":10485760,"total_chunks":10}
 {"phase":"uploading_chunk","current_chunk":1,"total_chunks":10,"bytes_sent":1048576,"total_bytes":10485760}
 {"phase":"file_uploaded","file_name":"video.mp4","size_bytes":10485760}
 {"phase":"waiting_for_asset","upload_id":"abc123","elapsed_secs":5}

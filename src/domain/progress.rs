@@ -33,7 +33,11 @@ pub enum UploadPhase {
     DirectUploadCreated { upload_id: String },
 
     /// ファイルアップロード開始
-    UploadingFile { file_name: String, size_bytes: u64 },
+    UploadingFile {
+        file_name: String,
+        size_bytes: u64,
+        total_chunks: usize,
+    },
 
     /// チャンクアップロード中
     UploadingChunk {

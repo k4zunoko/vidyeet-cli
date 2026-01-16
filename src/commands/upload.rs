@@ -103,10 +103,15 @@ pub async fn execute(
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("Upload URL not found in response"))?;
 
+    // total_chunksを事前計算
+    let chunk_size = APP_CONFIG.upload.chunk_size;
+    let total_chunks = ((validation.size as f64) / (chunk_size as f64)).ceil() as usize;
+
     // ファイルアップロード開始
     notify(UploadPhase::UploadingFile {
         file_name: file_name.clone(),
         size_bytes: validation.size,
+        total_chunks,
     })
     .await;
 

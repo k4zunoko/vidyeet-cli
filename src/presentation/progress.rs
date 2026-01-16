@@ -181,7 +181,8 @@ impl ToDisplay for UploadProgress {
             UploadPhase::UploadingFile {
                 file_name,
                 size_bytes,
-            } => Some(format_uploading_file(file_name, *size_bytes)),
+                total_chunks,
+            } => Some(format_uploading_file(file_name, *size_bytes, *total_chunks)),
             UploadPhase::UploadingChunk {
                 current_chunk,
                 total_chunks,
@@ -251,14 +252,17 @@ fn format_upload_created(upload_id: &str) -> DisplayProgress {
 }
 
 /// アップロード開始時の進捗表示を生成
-fn format_uploading_file(file_name: &str, size_bytes: u64) -> DisplayProgress {
+///
+/// 例: "Uploading file: video.mp4 (100.00 MB, 5 chunks)..."
+fn format_uploading_file(file_name: &str, size_bytes: u64, total_chunks: usize) -> DisplayProgress {
     let size_mb = size_bytes as f64 / BYTES_PER_MB;
     let precision = APP_CONFIG.presentation.size_display_precision;
     DisplayProgress::new(
         format!(
-            "Uploading file: {} ({:.prec$} MB)...",
+            "Uploading file: {} ({:.prec$} MB, {} chunks)...",
             file_name,
             size_mb,
+            total_chunks,
             prec = precision
         ),
         ProgressCategory::Upload,
